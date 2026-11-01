@@ -1,12 +1,12 @@
-/* SalonLove - Dynamic Currency Selection per Action (POS, Deposit, Bills) */
+/* SalonLove - Full Multi-Branch, Categorized Finances, Inventory & Period Reports */
 
 const DEFAULT_STATE = {
   isAdminLocked: true,
   adminPin: "1234",
   cashierName: "كاشير SalonLove",
   activeBranchId: "br-1",
-  globalCurrency: "SYP", // "SYP" or "USD"
-  exchangeRateUSD: 15000, // 1 USD = 15,000 SYP
+  globalCurrency: "SYP",
+  exchangeRateUSD: 15000,
   branches: [
     { id: "br-1", name: "فرع حمص", address: "حمص - شارع الدبلان / مقابل مجمع تشرين", phone: "031-224455" },
     { id: "br-2", name: "فرع الوادي", address: "وادي النصارى - مشتى الحلو / الشارع العام", phone: "031-778899" }
@@ -28,6 +28,7 @@ const DEFAULT_STATE = {
     { id: "inv-4", name: "زيت أرغان مغربي فاخر 100ml", category: "عناية بالبشرة", stocks: { "br-1": 8, "br-2": 3 }, minStock: 3, costPrice: 45000, sellPrice: 70000 },
     { id: "inv-5", name: "طلاء أظافر جيل OPI متعدّد", category: "أظافر وتجميل", stocks: { "br-1": 18, "br-2": 20 }, minStock: 5, costPrice: 18000, sellPrice: 30000 }
   ],
+  inventoryLogs: [],
   employees: [
     { id: "emp-1", branchId: "br-1", name: "ريم الأحمد", role: "قص وتصفيف", phone: "0933112233", payType: "both", fixedSalary: 600000, commissionRate: 15 },
     { id: "emp-2", branchId: "br-1", name: "نور الشام", role: "بشرة ومكياج", phone: "0944556677", payType: "commission", fixedSalary: 0, commissionRate: 25 },
@@ -68,8 +69,13 @@ let AppState = loadState();
 let posCart = [];
 let currentPosTab = "services";
 let selectedPaymentMethod = "cash";
-let posPaymentCurrency = "SYP"; // Active checkout currency selection
+let posPaymentCurrency = "SYP";
 let currentView = "dashboard";
+
+// Categorization Filters State
+let receiptsPeriod = "daily";
+let billsPeriod = "daily";
+let reportsPeriod = "daily";
 
 function getTodayDateString() {
   const d = new Date();
@@ -78,7 +84,7 @@ function getTodayDateString() {
 
 function loadState() {
   try {
-    const saved = localStorage.getItem('salonlove_multibranch_state_v5');
+    const saved = localStorage.getItem('salonlove_state_v7');
     if (saved) return JSON.parse(saved);
   } catch (e) {
     console.error("Error loading state", e);
@@ -88,13 +94,12 @@ function loadState() {
 
 function saveState() {
   try {
-    localStorage.setItem('salonlove_multibranch_state_v5', JSON.stringify(AppState));
+    localStorage.setItem('salonlove_state_v7', JSON.stringify(AppState));
   } catch (e) {
     console.error("Error saving state", e);
   }
 }
 
-// Convert/Format currencies
 function formatCurrency(amountInSYP, targetCurrency = null) {
   const sypVal = Number(amountInSYP || 0);
   const curr = targetCurrency || AppState.globalCurrency;
@@ -138,7 +143,6 @@ function filterByBranch(list) {
   return list.filter(item => item.branchId === AppState.activeBranchId);
 }
 
-// Mobile Sidebar Drawer Controller
 function toggleMobileSidebar(shouldOpen) {
   const sidebar = document.getElementById('app-sidebar');
   const backdrop = document.getElementById('mobile-sidebar-backdrop');
@@ -157,7 +161,6 @@ function toggleMobileSidebar(shouldOpen) {
   }
 }
 
-// Branch Switching Restricted to Manager Mode
 function handleBranchChangeAttempt(targetBranchId) {
   if (AppState.isAdminLocked) {
     const sel = document.getElementById('branch-selector');
@@ -282,6 +285,7 @@ function switchView(viewName) {
       break;
     case 'reports':
       mainContainer.innerHTML = renderReportsHTML();
+      bindReportsEvents();
       break;
   }
 
@@ -370,7 +374,7 @@ function openAdminPinModal(targetViewAfterSuccess = null, pendingBranchAfterSucc
         </div>
         <div>
           <h3 class="font-bold text-slate-800 text-base">دخول المدير (Admin PIN)</h3>
-          <p class="text-xs text-slate-500 mt-1">التبديل بين الفروع مخصص للمدير فقط (PIN: 1234)</p>
+          <p class="text-xs text-slate-500 mt-1">العملية مخصصة للمدير فقط (PIN: 1234)</p>
         </div>
         <input type="password" id="admin-pin-input" maxlength="6" placeholder="••••" class="w-full text-center text-2xl font-mono tracking-widest bg-slate-50 border border-slate-300 rounded-xl p-3 text-amber-600 focus:outline-none focus:border-amber-500">
         <div class="flex gap-2">
@@ -508,7 +512,7 @@ function renderDashboardHTML() {
   `;
 }
 
-// --- 2. POS VIEW WITH IN-CHECKOUT CURRENCY SELECTION ---
+// --- 2. POS VIEW ---
 function setPOSCheckoutCurrency(curr) {
   posPaymentCurrency = curr;
   updatePOSTotals();
@@ -586,7 +590,6 @@ function renderPOSHTML() {
             </div>
 
             <div class="border-t border-slate-200 pt-3 space-y-3">
-              <!-- Checkpoint 1: POS Currency Selector -->
               <div>
                 <label class="block text-[11px] text-slate-600 mb-1 font-semibold">عملة محاسبة الزبون:</label>
                 <div class="grid grid-cols-2 gap-2 text-xs">
@@ -813,6 +816,18 @@ function checkoutPOS(shouldPrint) {
       const invItem = AppState.inventory.find(i => i.id === cartItem.id);
       if (invItem && invItem.stocks[curBranch.id] !== undefined) {
         invItem.stocks[curBranch.id] = Math.max(0, invItem.stocks[curBranch.id] - cartItem.qty);
+        
+        AppState.inventoryLogs.push({
+          id: `MOV-${Date.now()}`,
+          date: nowStr,
+          branchId: curBranch.id,
+          productId: invItem.id,
+          productName: invItem.name,
+          type: "outbound_sale",
+          quantity: cartItem.qty,
+          referenceId: newReceiptId,
+          note: `بيع كاشير لـ ${customerName}`
+        });
       }
     }
   });
@@ -912,7 +927,6 @@ function convertApptToPOS(apptId) {
     updateBranchHeaderUI();
   }
 
-  // Set the POS payment currency to the deposit currency by default
   posPaymentCurrency = apt.depositCurrency || AppState.globalCurrency;
 
   switchView('pos');
@@ -937,7 +951,7 @@ function convertApptToPOS(apptId) {
 
 function bindPOSEvents() {}
 
-// --- 3. APPOINTMENTS WITH CURRENCY SELECTION ---
+// --- 3. APPOINTMENTS ---
 function renderAppointmentsHTML() {
   const today = getTodayDateString();
   const curBranch = getActiveBranch();
@@ -946,7 +960,7 @@ function renderAppointmentsHTML() {
       <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div>
           <h2 class="text-xl md:text-2xl font-black text-slate-800">نظام الحجوزات والمواعيد</h2>
-          <p class="text-xs text-slate-500">حجوزات <span class="font-bold text-amber-700">${curBranch.name}</span></p>
+          <p class="text-xs text-slate-500">حجوزات <span class="font-bold text-amber-700">${curBranch.name}</span> (${AppState.globalCurrency})</p>
         </div>
         <div class="flex items-center gap-2 sm:gap-3">
           <input type="date" id="appt-date-filter" value="${today}" onchange="filterAppointments()" class="bg-white border border-slate-300 rounded-xl px-2 sm:px-3 py-1.5 sm:py-2 text-xs text-slate-700 flex-1 sm:flex-none">
@@ -1021,7 +1035,6 @@ function filterAppointments() {
   }
 }
 
-// Checkpoint 2: Appointment Modal with Currency Selection
 function openNewAppointmentModal() {
   const curBranch = getActiveBranch();
   const servicesOpt = AppState.services.map(s => `<option value="${s.id}" data-price="${s.price}">${s.name} (${formatCurrency(s.price)})</option>`).join('');
@@ -1068,7 +1081,6 @@ function openNewAppointmentModal() {
             </select>
           </div>
           
-          <!-- Deposit Amount & Currency Selector -->
           <div class="p-3 bg-amber-50/70 rounded-xl border border-amber-200/80 space-y-2">
             <label class="block text-slate-700 font-bold">تسجيل الرعبون (الدفعة المسبقة):</label>
             <div class="grid grid-cols-12 gap-2">
@@ -1114,7 +1126,6 @@ function saveNewAppointment(e) {
   const depCurr = document.getElementById('appt-deposit-currency').value;
   let depositInput = Number(document.getElementById('appt-deposit-input')?.value || 0);
   
-  // Store deposit normalized to base SYP
   let depositBaseSYP = depositInput;
   if (depCurr === 'USD') {
     depositBaseSYP = depositInput * (AppState.exchangeRateUSD || 15000);
@@ -1163,28 +1174,59 @@ function deleteAppointment(id) {
 
 function bindAppointmentsEvents() {}
 
-// --- 4. RECEIPTS ---
+// --- 4. RECEIPTS (BUG FIXED: RESETTING DATES ON TOGGLE) ---
+function setReceiptsPeriod(period) {
+  receiptsPeriod = period;
+  const mainContainer = document.getElementById('app-main-content');
+  if (mainContainer && currentView === 'receipts') {
+    mainContainer.innerHTML = renderReceiptsHTML();
+    if (window.lucide) window.lucide.createIcons();
+    filterReceiptsTable();
+  }
+}
+
 function renderReceiptsHTML() {
+  const today = getTodayDateString();
+  const currentMonth = today.substring(0, 7);
+  const currentYear = today.substring(0, 4);
+
   return `
     <div class="space-y-4 md:space-y-6 animate-fade-in">
       <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div>
-          <h2 class="text-xl md:text-2xl font-black text-slate-800">سجل الإيصالات والمعاملات</h2>
-          <p class="text-xs text-slate-500">أرشيف الفواتير الصادرة وطرق السداد</p>
+          <h2 class="text-xl md:text-2xl font-black text-slate-800">سجل الإيصالات والمقبوضات</h2>
+          <p class="text-xs text-slate-500">أرشيف الفواتير الصادرة مصنفة حسب الفترات الزمنية</p>
         </div>
-        <div class="flex items-center gap-2 sm:gap-3">
-          <select id="receipt-filter-payment" onchange="filterReceiptsTable()" class="bg-white border border-slate-300 rounded-xl px-2 sm:px-3 py-1.5 sm:py-2 text-xs text-slate-700">
-            <option value="all">جميع الطرق</option>
+        
+        <div class="flex items-center bg-white p-1 rounded-xl border border-slate-200 shadow-sm self-start sm:self-auto">
+          <button type="button" onclick="setReceiptsPeriod('daily')" class="px-3 py-1.5 rounded-lg text-xs font-bold transition ${receiptsPeriod === 'daily' ? 'bg-amber-500 text-white shadow-sm' : 'text-slate-600 hover:text-amber-600'}">اليومي</button>
+          <button type="button" onclick="setReceiptsPeriod('monthly')" class="px-3 py-1.5 rounded-lg text-xs font-bold transition ${receiptsPeriod === 'monthly' ? 'bg-amber-500 text-white shadow-sm' : 'text-slate-600 hover:text-amber-600'}">الشهري</button>
+          <button type="button" onclick="setReceiptsPeriod('yearly')" class="px-3 py-1.5 rounded-lg text-xs font-bold transition ${receiptsPeriod === 'yearly' ? 'bg-amber-500 text-white shadow-sm' : 'text-slate-600 hover:text-amber-600'}">السنوي</button>
+        </div>
+      </div>
+
+      <div class="grid grid-cols-1 sm:grid-cols-12 gap-3 items-center bg-white p-3 rounded-xl border border-slate-200 shadow-sm">
+        <div class="sm:col-span-4 flex items-center gap-2">
+          <span class="text-xs text-slate-500 font-semibold whitespace-nowrap">تحديد الفترة:</span>
+          ${renderReceiptsPeriodInput(today, currentMonth, currentYear)}
+        </div>
+        <div class="sm:col-span-5 flex items-center gap-2">
+          <select id="receipt-filter-payment" onchange="filterReceiptsTable()" class="bg-slate-50 border border-slate-300 rounded-lg px-2.5 py-1.5 text-xs text-slate-700">
+            <option value="all">جميع طرق الدفع</option>
             <option value="cash">نقدي (Cash)</option>
             <option value="epayment">دفع إلكتروني</option>
             <option value="transfer">تحويل بنكي</option>
           </select>
-          <input type="text" id="receipt-search-input" oninput="filterReceiptsTable()" placeholder="بحث برقم الفاتورة..." class="bg-white border border-slate-300 rounded-xl px-2 sm:px-3 py-1.5 sm:py-2 text-xs text-slate-700 flex-1 sm:flex-none">
+          <input type="text" id="receipt-search-input" oninput="filterReceiptsTable()" placeholder="بحث برقم الفاتورة أو الزبون..." class="bg-slate-50 border border-slate-300 rounded-lg px-2.5 py-1.5 text-xs text-slate-700 flex-1">
+        </div>
+        <div class="sm:col-span-3 text-left sm:text-right border-t sm:border-t-0 sm:border-r border-slate-200 pt-2 sm:pt-0 sm:pr-3">
+          <span class="text-[11px] text-slate-500 block">إجمالي المقبوضات للفترة:</span>
+          <b id="receipts-period-total" class="text-base text-emerald-600 font-black">0 SYP</b>
         </div>
       </div>
 
       <div class="glass-panel p-3 md:p-4 overflow-x-auto">
-        <table class="w-full text-right text-xs text-slate-700 min-w-[500px]">
+        <table class="w-full text-right text-xs text-slate-700 min-w-[550px]">
           <thead class="bg-slate-50 text-amber-700 font-bold border-b border-slate-200">
             <tr>
               <th class="p-2 sm:p-3">رقم الفاتورة</th>
@@ -1197,7 +1239,6 @@ function renderReceiptsHTML() {
             </tr>
           </thead>
           <tbody id="receipts-table-body" class="divide-y divide-slate-100">
-            ${renderReceiptsRows()}
           </tbody>
         </table>
       </div>
@@ -1205,16 +1246,62 @@ function renderReceiptsHTML() {
   `;
 }
 
-function renderReceiptsRows(methodFilter = "all", searchQ = "") {
-  let list = [...filterByBranch(AppState.receipts)].reverse();
-  if (methodFilter !== "all") list = list.filter(r => r.paymentMethod === methodFilter);
-  if (searchQ) {
-    const q = searchQ.toLowerCase();
-    list = list.filter(r => r.id.toLowerCase().includes(q) || r.customerName.toLowerCase().includes(q));
+function renderReceiptsPeriodInput(today, currentMonth, currentYear) {
+  if (receiptsPeriod === 'daily') {
+    return `<input type="date" id="receipt-period-filter" value="${today}" onchange="filterReceiptsTable()" class="bg-slate-50 border border-slate-300 rounded-lg px-2 py-1 text-xs text-slate-700 flex-1">`;
+  } else if (receiptsPeriod === 'monthly') {
+    return `<input type="month" id="receipt-period-filter" value="${currentMonth}" onchange="filterReceiptsTable()" class="bg-slate-50 border border-slate-300 rounded-lg px-2 py-1 text-xs text-slate-700 flex-1">`;
+  } else {
+    return `
+      <select id="receipt-period-filter" onchange="filterReceiptsTable()" class="bg-slate-50 border border-slate-300 rounded-lg px-2 py-1 text-xs text-slate-700 flex-1">
+        <option value="${currentYear}" selected>${currentYear}</option>
+        <option value="2025">2025</option>
+        <option value="2024">2024</option>
+      </select>
+    `;
   }
-  if (list.length === 0) return `<tr><td colspan="7" class="p-6 text-center text-slate-400">لا توجد إيصالات</td></tr>`;
+}
 
-  return list.map(r => `
+function filterReceiptsTable() {
+  const periodEl = document.getElementById('receipt-period-filter');
+  let periodVal = periodEl ? periodEl.value : "";
+  
+  // Safe default fallback
+  if (!periodVal) {
+    const today = getTodayDateString();
+    periodVal = receiptsPeriod === 'daily' ? today : receiptsPeriod === 'monthly' ? today.substring(0, 7) : today.substring(0, 4);
+    if (periodEl) periodEl.value = periodVal;
+  }
+
+  const method = document.getElementById('receipt-filter-payment')?.value || 'all';
+  const q = document.getElementById('receipt-search-input')?.value.toLowerCase() || '';
+
+  let list = filterByBranch(AppState.receipts);
+
+  if (receiptsPeriod === 'daily' && periodVal) {
+    list = list.filter(r => r.date.startsWith(periodVal));
+  } else if (receiptsPeriod === 'monthly' && periodVal) {
+    list = list.filter(r => r.date.substring(0, 7) === periodVal.substring(0, 7));
+  } else if (receiptsPeriod === 'yearly' && periodVal) {
+    list = list.filter(r => r.date.substring(0, 4) === periodVal.substring(0, 4));
+  }
+
+  if (method !== 'all') list = list.filter(r => r.paymentMethod === method);
+  if (q) list = list.filter(r => r.id.toLowerCase().includes(q) || r.customerName.toLowerCase().includes(q));
+
+  const totalSum = list.reduce((sum, r) => sum + r.total, 0);
+  const totalDisplay = document.getElementById('receipts-period-total');
+  if (totalDisplay) totalDisplay.textContent = formatCurrency(totalSum);
+
+  const tbody = document.getElementById('receipts-table-body');
+  if (!tbody) return;
+
+  if (list.length === 0) {
+    tbody.innerHTML = `<tr><td colspan="7" class="p-6 text-center text-slate-400">لا توجد إيصالات مسجلة لهذه الفترة</td></tr>`;
+    return;
+  }
+
+  tbody.innerHTML = [...list].reverse().map(r => `
     <tr class="hover:bg-slate-50">
       <td class="p-2 sm:p-3 font-bold text-amber-600">${r.id}</td>
       <td class="p-2 sm:p-3">${r.date}</td>
@@ -1227,64 +1314,66 @@ function renderReceiptsRows(methodFilter = "all", searchQ = "") {
       </td>
     </tr>
   `).join('');
+
+  if (window.lucide) window.lucide.createIcons();
 }
 
-function filterReceiptsTable() {
-  const method = document.getElementById('receipt-filter-payment')?.value || 'all';
-  const q = document.getElementById('receipt-search-input')?.value || '';
-  const tbody = document.getElementById('receipts-table-body');
-  if (tbody) {
-    tbody.innerHTML = renderReceiptsRows(method, q);
+function bindReceiptsEvents() {
+  filterReceiptsTable();
+}
+
+// --- 5. BILLS & SPENDINGS (BUG FIXED: RESETTING DATES ON TOGGLE) ---
+function setBillsPeriod(period) {
+  billsPeriod = period;
+  const mainContainer = document.getElementById('app-main-content');
+  if (mainContainer && currentView === 'bills') {
+    mainContainer.innerHTML = renderBillsHTML();
     if (window.lucide) window.lucide.createIcons();
+    filterBillsTable();
   }
 }
 
-function bindReceiptsEvents() {}
-
-// --- 5. BILLS & EXPENSES WITH CURRENCY SELECTION ---
 function renderBillsHTML() {
-  const bills = filterByBranch(AppState.bills);
-  const totalBills = bills.reduce((sum, b) => sum + b.amount, 0);
-  const unpaidCount = bills.filter(b => b.status === 'غير مدفوعة').length;
+  const today = getTodayDateString();
+  const currentMonth = today.substring(0, 7);
+  const currentYear = today.substring(0, 4);
 
   return `
     <div class="space-y-4 md:space-y-6 animate-fade-in">
       <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div>
-          <h2 class="text-xl md:text-2xl font-black text-slate-800">المصاريف التشغيلية</h2>
-          <p class="text-xs text-slate-500">فواتير الكهرباء والمحروقات والإيجارات</p>
+          <h2 class="text-xl md:text-2xl font-black text-slate-800">المصاريف التشغيلية (Spendings)</h2>
+          <p class="text-xs text-slate-500">متابعة النفقات وفواتير الطاقة والإيجار مصنفة حسب الفترات</p>
         </div>
-        <button onclick="openNewBillModal()" class="gold-gradient-btn px-4 py-2 rounded-xl text-xs flex items-center justify-center gap-2">
-          <i data-lucide="plus" class="w-4 h-4"></i><span>تسجيل مصروف جديد</span>
-        </button>
+
+        <div class="flex items-center gap-2 self-start sm:self-auto">
+          <div class="flex items-center bg-white p-1 rounded-xl border border-slate-200 shadow-sm">
+            <button type="button" onclick="setBillsPeriod('daily')" class="px-3 py-1.5 rounded-lg text-xs font-bold transition ${billsPeriod === 'daily' ? 'bg-rose-500 text-white shadow-sm' : 'text-slate-600 hover:text-rose-600'}">اليومي</button>
+            <button type="button" onclick="setBillsPeriod('monthly')" class="px-3 py-1.5 rounded-lg text-xs font-bold transition ${billsPeriod === 'monthly' ? 'bg-rose-500 text-white shadow-sm' : 'text-slate-600 hover:text-rose-600'}">الشهري</button>
+            <button type="button" onclick="setBillsPeriod('yearly')" class="px-3 py-1.5 rounded-lg text-xs font-bold transition ${billsPeriod === 'yearly' ? 'bg-rose-500 text-white shadow-sm' : 'text-slate-600 hover:text-rose-600'}">السنوي</button>
+          </div>
+          <button onclick="openNewBillModal()" class="gold-gradient-btn px-3 sm:px-4 py-2 rounded-xl text-xs flex items-center gap-1.5 shadow-sm whitespace-nowrap">
+            <i data-lucide="plus" class="w-4 h-4"></i><span>تسجيل مصروف</span>
+          </button>
+        </div>
       </div>
 
-      <div class="grid grid-cols-1 sm:grid-cols-3 gap-3 md:gap-4">
-        <div class="glass-panel p-4 flex items-center justify-between border-rose-200">
-          <div>
-            <p class="text-xs text-slate-500">إجمالي المصاريف</p>
-            <h3 class="text-lg md:text-xl font-bold text-rose-600 mt-1">${formatCurrency(totalBills)}</h3>
-          </div>
-          <i data-lucide="calculator" class="w-7 h-7 md:w-8 md:h-8 text-rose-500/50"></i>
+      <div class="grid grid-cols-1 sm:grid-cols-12 gap-3 items-center bg-white p-3 rounded-xl border border-slate-200 shadow-sm">
+        <div class="sm:col-span-5 flex items-center gap-2">
+          <span class="text-xs text-slate-500 font-semibold whitespace-nowrap">فترة المصروف:</span>
+          ${renderBillsPeriodInput(today, currentMonth, currentYear)}
         </div>
-        <div class="glass-panel p-4 flex items-center justify-between border-amber-200">
-          <div>
-            <p class="text-xs text-slate-500">فواتير غير مدفوعة</p>
-            <h3 class="text-lg md:text-xl font-bold text-amber-600 mt-1">${unpaidCount}</h3>
-          </div>
-          <i data-lucide="clock" class="w-7 h-7 md:w-8 md:h-8 text-amber-500/50"></i>
+        <div class="sm:col-span-4">
+          <input type="text" id="bill-search-input" oninput="filterBillsTable()" placeholder="بحث باسم الفاتورة أو الفئة..." class="w-full bg-slate-50 border border-slate-300 rounded-lg px-2.5 py-1.5 text-xs text-slate-700">
         </div>
-        <div class="glass-panel p-4 flex items-center justify-between border-emerald-200">
-          <div>
-            <p class="text-xs text-slate-500">القسم التشغيلي</p>
-            <h3 class="text-sm md:text-base font-bold text-slate-800 mt-1">طاقة ومحروقات وإيجار</h3>
-          </div>
-          <i data-lucide="flame" class="w-7 h-7 md:w-8 md:h-8 text-amber-500/50"></i>
+        <div class="sm:col-span-3 text-left sm:text-right border-t sm:border-t-0 sm:border-r border-slate-200 pt-2 sm:pt-0 sm:pr-3">
+          <span class="text-[11px] text-slate-500 block">إجمالي نفقات الفترة:</span>
+          <b id="bills-period-total" class="text-base text-rose-600 font-black">0 SYP</b>
         </div>
       </div>
 
       <div class="glass-panel p-3 md:p-4 overflow-x-auto">
-        <table class="w-full text-right text-xs text-slate-700 min-w-[500px]">
+        <table class="w-full text-right text-xs text-slate-700 min-w-[550px]">
           <thead class="bg-slate-50 text-amber-700 font-bold border-b border-slate-200">
             <tr>
               <th class="p-2 sm:p-3">عنوان الفاتورة</th>
@@ -1295,20 +1384,7 @@ function renderBillsHTML() {
               <th class="p-2 sm:p-3 text-center">إجراءات</th>
             </tr>
           </thead>
-          <tbody class="divide-y divide-slate-100">
-            ${bills.map(b => `
-              <tr class="hover:bg-slate-50">
-                <td class="p-2 sm:p-3 font-bold text-slate-800">${b.title}</td>
-                <td class="p-2 sm:p-3">${b.category}</td>
-                <td class="p-2 sm:p-3 font-bold text-rose-600">${formatCurrency(b.amount, b.currency)} <span class="text-[10px] text-slate-400">(${b.currency || 'SYP'})</span></td>
-                <td class="p-2 sm:p-3">${b.date}</td>
-                <td class="p-2 sm:p-3"><span class="px-2 py-0.5 rounded text-[10px] font-semibold ${b.status === 'مدفوعة' ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'}">${b.status}</span></td>
-                <td class="p-2 sm:p-3 text-center flex items-center justify-center gap-1">
-                  <button onclick="toggleBillStatus('${b.id}')" title="تبديل الحالة" class="p-1.5 bg-slate-100 text-slate-700 rounded border border-slate-200"><i data-lucide="refresh-cw" class="w-3.5 h-3.5"></i></button>
-                  <button onclick="deleteBill('${b.id}')" title="حذف" class="p-1.5 bg-rose-50 text-rose-600 rounded border border-rose-200"><i data-lucide="trash-2" class="w-3.5 h-3.5"></i></button>
-                </td>
-              </tr>
-            `).join('')}
+          <tbody id="bills-table-body" class="divide-y divide-slate-100">
           </tbody>
         </table>
       </div>
@@ -1316,7 +1392,79 @@ function renderBillsHTML() {
   `;
 }
 
-// Checkpoint 3: Bill Recording Modal with Currency Selection
+function renderBillsPeriodInput(today, currentMonth, currentYear) {
+  if (billsPeriod === 'daily') {
+    return `<input type="date" id="bill-period-filter" value="${today}" onchange="filterBillsTable()" class="bg-slate-50 border border-slate-300 rounded-lg px-2 py-1 text-xs text-slate-700 flex-1">`;
+  } else if (billsPeriod === 'monthly') {
+    return `<input type="month" id="bill-period-filter" value="${currentMonth}" onchange="filterBillsTable()" class="bg-slate-50 border border-slate-300 rounded-lg px-2 py-1 text-xs text-slate-700 flex-1">`;
+  } else {
+    return `
+      <select id="bill-period-filter" onchange="filterBillsTable()" class="bg-slate-50 border border-slate-300 rounded-lg px-2 py-1 text-xs text-slate-700 flex-1">
+        <option value="${currentYear}" selected>${currentYear}</option>
+        <option value="2025">2025</option>
+        <option value="2024">2024</option>
+      </select>
+    `;
+  }
+}
+
+function filterBillsTable() {
+  const periodEl = document.getElementById('bill-period-filter');
+  let periodVal = periodEl ? periodEl.value : "";
+  
+  if (!periodVal) {
+    const today = getTodayDateString();
+    periodVal = billsPeriod === 'daily' ? today : billsPeriod === 'monthly' ? today.substring(0, 7) : today.substring(0, 4);
+    if (periodEl) periodEl.value = periodVal;
+  }
+
+  const q = document.getElementById('bill-search-input')?.value.toLowerCase() || '';
+
+  let list = filterByBranch(AppState.bills);
+
+  if (billsPeriod === 'daily' && periodVal) {
+    list = list.filter(b => b.date.startsWith(periodVal));
+  } else if (billsPeriod === 'monthly' && periodVal) {
+    list = list.filter(b => b.date.substring(0, 7) === periodVal.substring(0, 7));
+  } else if (billsPeriod === 'yearly' && periodVal) {
+    list = list.filter(b => b.date.substring(0, 4) === periodVal.substring(0, 4));
+  }
+
+  if (q) list = list.filter(b => b.title.toLowerCase().includes(q) || b.category.toLowerCase().includes(q));
+
+  const totalSum = list.reduce((sum, b) => sum + b.amount, 0);
+  const totalDisplay = document.getElementById('bills-period-total');
+  if (totalDisplay) totalDisplay.textContent = formatCurrency(totalSum);
+
+  const tbody = document.getElementById('bills-table-body');
+  if (!tbody) return;
+
+  if (list.length === 0) {
+    tbody.innerHTML = `<tr><td colspan="6" class="p-6 text-center text-slate-400">لا توجد مصاريف مسجلة لهذه الفترة</td></tr>`;
+    return;
+  }
+
+  tbody.innerHTML = list.map(b => `
+    <tr class="hover:bg-slate-50">
+      <td class="p-2 sm:p-3 font-bold text-slate-800">${b.title}</td>
+      <td class="p-2 sm:p-3">${b.category}</td>
+      <td class="p-2 sm:p-3 font-bold text-rose-600">${formatCurrency(b.amount, b.currency)} <span class="text-[10px] text-slate-400">(${b.currency || 'SYP'})</span></td>
+      <td class="p-2 sm:p-3">${b.date}</td>
+      <td class="p-2 sm:p-3"><span class="px-2 py-0.5 rounded text-[10px] font-semibold ${b.status === 'مدفوعة' ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'}">${b.status}</span></td>
+      <td class="p-2 sm:p-3 text-center flex items-center justify-center gap-1">
+        <button onclick="toggleBillStatus('${b.id}')" title="تبديل الحالة" class="p-1.5 bg-slate-100 text-slate-700 rounded border border-slate-200"><i data-lucide="refresh-cw" class="w-3.5 h-3.5"></i></button>
+        <button onclick="deleteBill('${b.id}')" title="حذف" class="p-1.5 bg-rose-50 text-rose-600 rounded border border-rose-200"><i data-lucide="trash-2" class="w-3.5 h-3.5"></i></button>
+      </td>
+    </tr>
+  `).join('');
+
+  if (window.lucide) window.lucide.createIcons();
+}
+
+function bindBillsEvents() {
+  filterBillsTable();
+}
+
 function openNewBillModal() {
   const holder = document.getElementById('modals-placeholder');
   holder.innerHTML = `
@@ -1337,6 +1485,7 @@ function openNewBillModal() {
               <option value="كهرباء">كهرباء</option>
               <option value="مازوت/محروقات">مازوت ومحروقات</option>
               <option value="إيجار">إيجار</option>
+              <option value="صيانة وتجهيزات">صيانة وتجهيزات</option>
               <option value="أخرى">أخرى</option>
             </select>
           </div>
@@ -1352,6 +1501,10 @@ function openNewBillModal() {
                 <option value="USD" ${AppState.globalCurrency === 'USD' ? 'selected' : ''}>$ (USD)</option>
               </select>
             </div>
+          </div>
+          <div>
+            <label class="block text-slate-600 mb-1">تاريخ المصروف</label>
+            <input type="date" id="bill-date" value="${getTodayDateString()}" required class="w-full bg-slate-50 border border-slate-300 rounded-lg p-2 text-slate-800">
           </div>
           <div class="pt-2 flex gap-2">
             <button type="button" onclick="closeModalDirect('modal-bill')" class="w-1/2 bg-slate-100 text-slate-700 py-2.5 rounded-xl font-semibold">إلغاء</button>
@@ -1370,20 +1523,19 @@ function saveNewBill(e) {
   const title = document.getElementById('bill-title').value;
   const category = document.getElementById('bill-category').value;
   const currency = document.getElementById('bill-currency').value;
+  const date = document.getElementById('bill-date').value || getTodayDateString();
   let amountInput = Number(document.getElementById('bill-amount').value);
   
-  // Store base as SYP
   let amountBaseSYP = amountInput;
   if (currency === 'USD') {
     amountBaseSYP = amountInput * (AppState.exchangeRateUSD || 15000);
   }
-  const date = getTodayDateString();
   const status = "مدفوعة";
 
   AppState.bills.push({ id: `bill-${Date.now()}`, branchId, title, category, amount: amountBaseSYP, currency, date, status });
   saveState();
   closeModalDirect('modal-bill');
-  if (currentView === 'bills') switchView('bills');
+  if (currentView === 'bills') filterBillsTable();
 }
 
 function toggleBillStatus(id) {
@@ -1391,59 +1543,63 @@ function toggleBillStatus(id) {
   if (b) {
     b.status = b.status === 'مدفوعة' ? 'غير مدفوعة' : 'مدفوعة';
     saveState();
-    if (currentView === 'bills') switchView('bills');
+    if (currentView === 'bills') filterBillsTable();
   }
 }
 
 function deleteBill(id) {
-  if (confirm("حذف هذا المصروف؟")) {
+  if (confirm("هل أنت متأكد من حذف هذا المصروف؟")) {
     AppState.bills = AppState.bills.filter(x => x.id !== id);
     saveState();
-    if (currentView === 'bills') switchView('bills');
+    if (currentView === 'bills') filterBillsTable();
   }
 }
 
-function bindBillsEvents() {}
-
-// --- 6. INVENTORY ---
+// --- 6. ADVANCED INVENTORY MANAGEMENT ---
 function renderInventoryHTML() {
   const curBranch = getActiveBranch();
 
   return `
     <div class="space-y-4 md:space-y-6 animate-fade-in">
-      <div class="flex flex-col md:flex-row md:items-center justify-between gap-2">
+      <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div>
-          <h2 class="text-xl md:text-2xl font-black text-slate-800">مخزون المستحضرات والتجهيزات</h2>
-          <p class="text-xs text-slate-500">الكميات الحالية المتوفرة في مستودعات الفروع</p>
+          <h2 class="text-xl md:text-2xl font-black text-slate-800">إدارة المستودع والمخزون</h2>
+          <p class="text-xs text-slate-500">متابعة المستحضرات، إضافة منتجات جديدة، تعديل الأسعار، وسندات الإدخال</p>
+        </div>
+
+        <div class="flex items-center gap-2 self-start sm:self-auto">
+          <button onclick="openInventoryLogModal()" class="bg-white hover:bg-slate-100 text-slate-700 border border-slate-300 px-3 py-2 rounded-xl text-xs font-bold flex items-center gap-1.5 shadow-sm">
+            <i data-lucide="history" class="w-4 h-4 text-amber-600"></i><span>سجل حركة المواد</span>
+          </button>
+          <button onclick="openAddProductModal()" class="gold-gradient-btn px-4 py-2 rounded-xl text-xs font-bold flex items-center gap-1.5 shadow-sm">
+            <i data-lucide="plus-circle" class="w-4 h-4"></i><span>إضافة منتج جديد</span>
+          </button>
+        </div>
+      </div>
+
+      <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-white p-3 rounded-xl border border-slate-200 shadow-sm">
+        <input type="text" id="inv-search-input" oninput="filterInventoryCatalog()" placeholder="بحث باسم المستحضر أو الفئة..." class="bg-slate-50 border border-slate-300 rounded-lg px-3 py-1.5 text-xs text-slate-700 w-full sm:w-80">
+        <div class="flex items-center gap-2 text-xs">
+          <span class="text-slate-500">الفرع النشط للإجراءات السريعة:</span>
+          <span class="font-bold text-amber-700 bg-amber-50 px-2 py-0.5 rounded border border-amber-200">${curBranch.name}</span>
         </div>
       </div>
 
       <div class="glass-panel p-3 md:p-4 overflow-x-auto">
-        <table class="w-full text-right text-xs text-slate-700 min-w-[500px]">
+        <table class="w-full text-right text-xs text-slate-700 min-w-[750px]">
           <thead class="bg-slate-50 text-amber-700 font-bold border-b border-slate-200">
             <tr>
-              <th class="p-2 sm:p-3">المنتج</th>
-              <th class="p-2 sm:p-3 text-center">فرع حمص</th>
-              <th class="p-2 sm:p-3 text-center">فرع الوادي</th>
+              <th class="p-2 sm:p-3">اسم المستحضر / المنتج</th>
+              <th class="p-2 sm:p-3">الفئة</th>
+              <th class="p-2 sm:p-3 text-center">مستودع حمص</th>
+              <th class="p-2 sm:p-3 text-center">مستودع الوادي</th>
               <th class="p-2 sm:p-3">الحد الأدنى</th>
-              <th class="p-2 sm:p-3">سعر البيع</th>
-              <th class="p-2 sm:p-3 text-center">تعديل المخزون (${curBranch.name})</th>
+              <th class="p-2 sm:p-3">سعر التكلفة</th>
+              <th class="p-2 sm:p-3">سعر البيع الحالي</th>
+              <th class="p-2 sm:p-3 text-center">إجراءات المخزون</th>
             </tr>
           </thead>
-          <tbody class="divide-y divide-slate-100">
-            ${AppState.inventory.map(item => `
-              <tr class="hover:bg-slate-50 ${(item.stocks[curBranch.id] || 0) <= item.minStock ? 'bg-rose-50' : ''}">
-                <td class="p-2 sm:p-3 font-bold text-slate-800">${item.name}</td>
-                <td class="p-2 sm:p-3 text-center font-bold text-slate-700">${item.stocks['br-1'] || 0}</td>
-                <td class="p-2 sm:p-3 text-center font-bold text-slate-700">${item.stocks['br-2'] || 0}</td>
-                <td class="p-2 sm:p-3">${item.minStock}</td>
-                <td class="p-2 sm:p-3 font-bold text-amber-600">${formatCurrency(item.sellPrice)}</td>
-                <td class="p-2 sm:p-3 text-center flex items-center justify-center gap-1">
-                  <button onclick="adjustStock('${item.id}', 1)" class="w-6 h-6 bg-white border border-slate-300 rounded font-bold text-slate-700">+</button>
-                  <button onclick="adjustStock('${item.id}', -1)" class="w-6 h-6 bg-white border border-slate-300 rounded font-bold text-slate-700">-</button>
-                </td>
-              </tr>
-            `).join('')}
+          <tbody id="inventory-table-body" class="divide-y divide-slate-100">
           </tbody>
         </table>
       </div>
@@ -1451,18 +1607,409 @@ function renderInventoryHTML() {
   `;
 }
 
-function adjustStock(id, delta) {
-  const branchKey = AppState.activeBranchId;
-  const item = AppState.inventory.find(i => i.id === id);
-  if (item && item.stocks[branchKey] !== undefined) {
-    item.stocks[branchKey] = Math.max(0, item.stocks[branchKey] + delta);
-    saveState();
-    updateBadges();
-    if (currentView === 'inventory') switchView('inventory');
+function filterInventoryCatalog() {
+  const q = document.getElementById('inv-search-input')?.value.toLowerCase() || '';
+  const curBranch = getActiveBranch();
+  const tbody = document.getElementById('inventory-table-body');
+  if (!tbody) return;
+
+  const filtered = AppState.inventory.filter(i => i.name.toLowerCase().includes(q) || (i.category || '').toLowerCase().includes(q));
+
+  if (filtered.length === 0) {
+    tbody.innerHTML = `<tr><td colspan="8" class="p-6 text-center text-slate-400">لا توجد منتجات مطابقة للبحث</td></tr>`;
+    return;
+  }
+
+  tbody.innerHTML = filtered.map(item => {
+    const isLow = (item.stocks[curBranch.id] || 0) <= item.minStock;
+    return `
+      <tr class="hover:bg-slate-50 ${isLow ? 'bg-rose-50/60' : ''}">
+        <td class="p-2 sm:p-3 font-bold text-slate-800">
+          ${item.name}
+          ${isLow ? '<span class="inline-block mr-1 text-[10px] text-rose-600 bg-rose-100 px-1.5 py-0.2 rounded font-bold">نقص بالمخزون</span>' : ''}
+        </td>
+        <td class="p-2 sm:p-3">${item.category || 'عام'}</td>
+        <td class="p-2 sm:p-3 text-center font-bold text-slate-700">${item.stocks['br-1'] || 0}</td>
+        <td class="p-2 sm:p-3 text-center font-bold text-slate-700">${item.stocks['br-2'] || 0}</td>
+        <td class="p-2 sm:p-3">${item.minStock}</td>
+        <td class="p-2 sm:p-3 text-slate-500">${formatCurrency(item.costPrice || 0)}</td>
+        <td class="p-2 sm:p-3 font-bold text-amber-600">${formatCurrency(item.sellPrice)}</td>
+        <td class="p-2 sm:p-3 text-center flex items-center justify-center gap-1.5">
+          <button onclick="openRestockModal('${item.id}')" title="إدخال كمية إضافية (سند إدخال)" class="px-2 py-1 bg-amber-500 hover:bg-amber-600 text-white rounded-lg font-bold text-[11px] flex items-center gap-1 shadow-sm">
+            <i data-lucide="plus" class="w-3.5 h-3.5"></i> <span>إضافة عدد</span>
+          </button>
+          <button onclick="openEditPriceModal('${item.id}')" title="تعديل السعر" class="p-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg border border-slate-200">
+            <i data-lucide="pencil" class="w-3.5 h-3.5"></i>
+          </button>
+          <button onclick="deleteInventoryItem('${item.id}')" title="حذف المنتج نهائياً" class="p-1.5 bg-rose-50 hover:bg-rose-100 text-rose-600 rounded-lg border border-rose-200">
+            <i data-lucide="trash-2" class="w-3.5 h-3.5"></i>
+          </button>
+        </td>
+      </tr>
+    `;
+  }).join('');
+
+  if (window.lucide) window.lucide.createIcons();
+}
+
+function bindInventoryEvents() {
+  filterInventoryCatalog();
+}
+
+function openAddProductModal() {
+  const curBranch = getActiveBranch();
+  const holder = document.getElementById('modals-placeholder');
+  holder.innerHTML = `
+    <div id="modal-add-product" class="fixed inset-0 modal-overlay flex items-center justify-center p-3 sm:p-4 z-50">
+      <div class="glass-panel w-full max-w-md max-h-[92vh] overflow-y-auto p-4 sm:p-6 rounded-2xl border border-slate-300 animate-fade-in space-y-4 shadow-xl">
+        <div class="flex items-center justify-between border-b border-slate-200 pb-3">
+          <h3 class="font-bold text-slate-800 text-base">إضافة منتج جديد للمستودع</h3>
+          <button onclick="closeModalDirect('modal-add-product')" class="text-slate-400 hover:text-slate-700"><i data-lucide="x" class="w-5 h-5"></i></button>
+        </div>
+        <form onsubmit="saveNewProduct(event)" class="space-y-3 text-xs">
+          <div>
+            <label class="block text-slate-600 mb-1">اسم المنتج / المستحضر *</label>
+            <input type="text" id="prod-name" required placeholder="مثال: سيروم لوريال للشعر 150ml" class="w-full bg-slate-50 border border-slate-300 rounded-lg p-2 text-slate-800">
+          </div>
+          <div>
+            <label class="block text-slate-600 mb-1">الفئة</label>
+            <input type="text" id="prod-category" placeholder="مثال: عناية بالشعر" class="w-full bg-slate-50 border border-slate-300 rounded-lg p-2 text-slate-800">
+          </div>
+          <div class="grid grid-cols-2 gap-2">
+            <div>
+              <label class="block text-slate-600 mb-1">سعر التكلفة (SYP)</label>
+              <input type="number" id="prod-cost" min="0" value="0" step="500" class="w-full bg-slate-50 border border-slate-300 rounded-lg p-2 text-slate-800 font-bold">
+            </div>
+            <div>
+              <label class="block text-slate-600 mb-1">سعر البيع النهائي (SYP) *</label>
+              <input type="number" id="prod-sell" min="1" required step="500" placeholder="0" class="w-full bg-slate-50 border border-amber-300 rounded-lg p-2 text-amber-700 font-bold">
+            </div>
+          </div>
+          <div class="grid grid-cols-2 gap-2">
+            <div>
+              <label class="block text-slate-600 mb-1">الكمية الابتدائية لـ ${curBranch.name} *</label>
+              <input type="number" id="prod-initial-stock" min="0" value="10" required class="w-full bg-slate-50 border border-slate-300 rounded-lg p-2 text-slate-800 font-bold">
+            </div>
+            <div>
+              <label class="block text-slate-600 mb-1">الحد الأدنى للتنبيه بالنقص</label>
+              <input type="number" id="prod-min-stock" min="1" value="3" required class="w-full bg-slate-50 border border-slate-300 rounded-lg p-2 text-slate-800 font-bold">
+            </div>
+          </div>
+          <div class="pt-2 flex gap-2">
+            <button type="button" onclick="closeModalDirect('modal-add-product')" class="w-1/2 bg-slate-100 text-slate-700 py-2.5 rounded-xl font-semibold">إلغاء</button>
+            <button type="submit" class="w-1/2 gold-gradient-btn py-2.5 rounded-xl font-bold">حفظ المنتج</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  `;
+  if (window.lucide) window.lucide.createIcons();
+}
+
+function saveNewProduct(e) {
+  e.preventDefault();
+  const name = document.getElementById('prod-name').value;
+  const category = document.getElementById('prod-category').value || "عام";
+  const costPrice = Number(document.getElementById('prod-cost').value || 0);
+  const sellPrice = Number(document.getElementById('prod-sell').value);
+  const initialQty = Number(document.getElementById('prod-initial-stock').value || 0);
+  const minStock = Number(document.getElementById('prod-min-stock').value || 3);
+  const targetBranch = AppState.activeBranchId;
+
+  const newId = `inv-${Date.now()}`;
+  const newProduct = {
+    id: newId,
+    name,
+    category,
+    stocks: {
+      "br-1": targetBranch === "br-1" ? initialQty : 0,
+      "br-2": targetBranch === "br-2" ? initialQty : 0
+    },
+    minStock,
+    costPrice,
+    sellPrice
+  };
+
+  AppState.inventory.push(newProduct);
+
+  if (initialQty > 0) {
+    const now = new Date();
+    AppState.inventoryLogs.push({
+      id: `MOV-${Date.now()}`,
+      date: `${now.toISOString().split('T')[0]} ${now.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })}`,
+      branchId: targetBranch,
+      productId: newId,
+      productName: name,
+      type: "inbound_restock",
+      quantity: initialQty,
+      referenceId: "INITIAL-STOCK",
+      note: "رصيد افتتاحي للمنتج"
+    });
+  }
+
+  saveState();
+  updateBadges();
+  closeModalDirect('modal-add-product');
+  if (currentView === 'inventory') filterInventoryCatalog();
+}
+
+function openRestockModal(itemId) {
+  const item = AppState.inventory.find(i => i.id === itemId);
+  if (!item) return;
+
+  const curBranch = getActiveBranch();
+  const holder = document.getElementById('modals-placeholder');
+  holder.innerHTML = `
+    <div id="modal-restock" class="fixed inset-0 modal-overlay flex items-center justify-center p-3 sm:p-4 z-50">
+      <div class="glass-panel w-full max-w-md max-h-[92vh] overflow-y-auto p-4 sm:p-6 rounded-2xl border border-slate-300 animate-fade-in space-y-4 shadow-xl">
+        <div class="flex items-center justify-between border-b border-slate-200 pb-3">
+          <div>
+            <h3 class="font-bold text-slate-800 text-base">إضافة كمية للمخزون (سند إدخال)</h3>
+            <p class="text-xs text-amber-700 font-bold mt-0.5">${item.name} (${curBranch.name})</p>
+          </div>
+          <button onclick="closeModalDirect('modal-restock')" class="text-slate-400 hover:text-slate-700"><i data-lucide="x" class="w-5 h-5"></i></button>
+        </div>
+        <form onsubmit="saveRestock(event, '${item.id}')" class="space-y-3 text-xs">
+          <div>
+            <label class="block text-slate-600 mb-1">الكمية المضافة حالياً *</label>
+            <input type="number" id="restock-qty" min="1" value="10" required class="w-full bg-slate-50 border border-amber-300 rounded-lg p-2.5 text-base text-amber-800 font-bold text-center">
+            <span class="text-[11px] text-slate-400 mt-1 block">الكمية المتوفرة بالمستودع حالياً: ${item.stocks[curBranch.id] || 0}</span>
+          </div>
+          <div>
+            <label class="block text-slate-600 mb-1">المورد / المصدر / البيان</label>
+            <input type="text" id="restock-supplier" placeholder="مثال: فاتورة توريد من وكالة لوريال دمشق" class="w-full bg-slate-50 border border-slate-300 rounded-lg p-2 text-slate-800">
+          </div>
+          <div class="flex items-center gap-2 bg-slate-50 p-2.5 rounded-lg border border-slate-200">
+            <input type="checkbox" id="restock-print-voucher" checked class="w-4 h-4 text-amber-600 rounded">
+            <label for="restock-print-voucher" class="text-xs text-slate-700 font-semibold cursor-pointer">إصدار وطباعة سند إدخال مخزني (Receipt/Voucher)</label>
+          </div>
+          <div class="pt-2 flex gap-2">
+            <button type="button" onclick="closeModalDirect('modal-restock')" class="w-1/2 bg-slate-100 text-slate-700 py-2.5 rounded-xl font-semibold">إلغاء</button>
+            <button type="submit" class="w-1/2 gold-gradient-btn py-2.5 rounded-xl font-bold flex items-center justify-center gap-1">
+              <i data-lucide="check" class="w-4 h-4"></i> تأكيد وإدخال
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  `;
+  if (window.lucide) window.lucide.createIcons();
+}
+
+function saveRestock(e, itemId) {
+  e.preventDefault();
+  const item = AppState.inventory.find(i => i.id === itemId);
+  if (!item) return;
+
+  const curBranch = getActiveBranch();
+  const addedQty = Number(document.getElementById('restock-qty').value);
+  const supplierNote = document.getElementById('restock-supplier').value || "توريد مباشر للمستودع";
+  const shouldPrint = document.getElementById('restock-print-voucher').checked;
+
+  item.stocks[curBranch.id] = (item.stocks[curBranch.id] || 0) + addedQty;
+
+  const now = new Date();
+  const nowStr = `${now.toISOString().split('T')[0]} ${now.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })}`;
+  const voucherId = `IN-${Math.floor(1000 + Math.random() * 9000)}`;
+
+  const logEntry = {
+    id: voucherId,
+    date: nowStr,
+    branchId: curBranch.id,
+    branchName: curBranch.name,
+    productId: item.id,
+    productName: item.name,
+    type: "inbound_restock",
+    quantity: addedQty,
+    referenceId: voucherId,
+    note: supplierNote,
+    unitPrice: item.costPrice || item.sellPrice
+  };
+
+  AppState.inventoryLogs.push(logEntry);
+  saveState();
+  updateBadges();
+  closeModalDirect('modal-restock');
+
+  if (currentView === 'inventory') filterInventoryCatalog();
+
+  if (shouldPrint) {
+    openInboundVoucherModal(logEntry);
   }
 }
 
-function bindInventoryEvents() {}
+function openInboundVoucherModal(log) {
+  const branchObj = AppState.branches.find(b => b.id === log.branchId) || AppState.branches[0];
+  const holder = document.getElementById('modals-placeholder');
+  holder.innerHTML = `
+    <div id="modal-voucher-view" class="fixed inset-0 modal-overlay flex items-center justify-center p-3 z-50">
+      <div class="glass-panel w-full max-w-sm max-h-[90vh] overflow-y-auto p-4 sm:p-6 rounded-2xl border border-slate-300 space-y-4 animate-fade-in shadow-2xl">
+        <div class="flex items-center justify-between border-b border-slate-200 pb-3">
+          <h3 class="font-bold text-slate-800 text-sm">سند إدخال مستودعي - SalonLove</h3>
+          <button onclick="closeModalDirect('modal-voucher-view')" class="text-slate-400 hover:text-slate-700"><i data-lucide="x" class="w-5 h-5"></i></button>
+        </div>
+
+        <div id="printable-receipt-area" class="bg-white text-slate-900 p-4 rounded-xl shadow-sm border border-slate-200 font-mono text-xs space-y-3">
+          <div class="text-center border-b border-dashed border-slate-400 pb-2">
+            <h2 class="font-black text-base text-amber-700">SalonLove - سند إدخال مواد</h2>
+            <p class="text-[11px] font-bold text-slate-800">${branchObj.name}</p>
+            <p class="text-[10px]">${branchObj.address}</p>
+          </div>
+          <div class="text-[11px] space-y-1">
+            <div class="flex justify-between"><span>رقم السند:</span><span class="font-bold">${log.id}</span></div>
+            <div class="flex justify-between"><span>التاريخ:</span><span>${log.date}</span></div>
+            <div class="flex justify-between"><span>المصدر / الملاحظة:</span><span>${log.note}</span></div>
+          </div>
+          <table class="w-full border-t border-b border-dashed border-slate-400 py-1 text-right text-[11px]">
+            <thead>
+              <tr class="text-[10px] text-slate-600 border-b border-slate-200">
+                <th>المادة</th><th class="text-center">الكمية المضافة</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>${log.productName}</td>
+                <td class="text-center font-bold text-amber-700">+ ${log.quantity}</td>
+              </tr>
+            </tbody>
+          </table>
+          <div class="text-center text-[10px] text-slate-500 pt-2 border-t border-dashed border-slate-300">
+            <p>توقيع أمين المستودع / المسؤول: _______________</p>
+          </div>
+        </div>
+
+        <div class="flex gap-2">
+          <button onclick="closeModalDirect('modal-voucher-view')" class="w-1/2 bg-slate-100 text-slate-700 py-2.5 rounded-xl text-xs font-semibold">إغلاق</button>
+          <button onclick="window.print()" class="w-1/2 gold-gradient-btn py-2.5 rounded-xl text-xs font-bold flex items-center justify-center gap-1">
+            <i data-lucide="printer" class="w-4 h-4"></i> طباعة السند
+          </button>
+        </div>
+      </div>
+    </div>
+  `;
+  if (window.lucide) window.lucide.createIcons();
+}
+
+function openEditPriceModal(itemId) {
+  const item = AppState.inventory.find(i => i.id === itemId);
+  if (!item) return;
+
+  const holder = document.getElementById('modals-placeholder');
+  holder.innerHTML = `
+    <div id="modal-edit-price" class="fixed inset-0 modal-overlay flex items-center justify-center p-3 sm:p-4 z-50">
+      <div class="glass-panel w-full max-w-sm p-4 sm:p-6 rounded-2xl border border-slate-300 animate-fade-in space-y-4 shadow-xl">
+        <div class="flex items-center justify-between border-b border-slate-200 pb-3">
+          <h3 class="font-bold text-slate-800 text-base">تعديل سعر المنتج</h3>
+          <button onclick="closeModalDirect('modal-edit-price')" class="text-slate-400 hover:text-slate-700"><i data-lucide="x" class="w-5 h-5"></i></button>
+        </div>
+        <form onsubmit="saveProductPrice(event, '${item.id}')" class="space-y-3 text-xs">
+          <div>
+            <span class="text-xs text-slate-500 block mb-1">المنتج:</span>
+            <h4 class="font-bold text-slate-800">${item.name}</h4>
+          </div>
+          <div>
+            <label class="block text-slate-600 mb-1">سعر البيع الجديد (SYP) *</label>
+            <input type="number" id="edit-sell-price" min="1" step="500" value="${item.sellPrice}" required class="w-full bg-slate-50 border border-amber-300 rounded-lg p-2 font-bold text-amber-700 text-base">
+          </div>
+          <div>
+            <label class="block text-slate-600 mb-1">سعر التكلفة (SYP)</label>
+            <input type="number" id="edit-cost-price" min="0" step="500" value="${item.costPrice || 0}" class="w-full bg-slate-50 border border-slate-300 rounded-lg p-2 text-slate-800 font-bold">
+          </div>
+          <div class="pt-2 flex gap-2">
+            <button type="button" onclick="closeModalDirect('modal-edit-price')" class="w-1/2 bg-slate-100 text-slate-700 py-2 rounded-xl font-semibold">إلغاء</button>
+            <button type="submit" class="w-1/2 gold-gradient-btn py-2 rounded-xl font-bold">تحديث السعر</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  `;
+  if (window.lucide) window.lucide.createIcons();
+}
+
+function saveProductPrice(e, itemId) {
+  e.preventDefault();
+  const item = AppState.inventory.find(i => i.id === itemId);
+  if (!item) return;
+
+  const newSell = Number(document.getElementById('edit-sell-price').value);
+  const newCost = Number(document.getElementById('edit-cost-price').value || 0);
+
+  item.sellPrice = newSell;
+  item.costPrice = newCost;
+
+  saveState();
+  closeModalDirect('modal-edit-price');
+  if (currentView === 'inventory') filterInventoryCatalog();
+}
+
+function deleteInventoryItem(itemId) {
+  const item = AppState.inventory.find(i => i.id === itemId);
+  if (!item) return;
+
+  if (confirm(`هل أنت متأكد من حذف المنتج "${item.name}" نهائياً من المستودع؟`)) {
+    AppState.inventory = AppState.inventory.filter(i => i.id !== itemId);
+    saveState();
+    updateBadges();
+    if (currentView === 'inventory') filterInventoryCatalog();
+  }
+}
+
+function openInventoryLogModal() {
+  const curBranch = getActiveBranch();
+  const logs = AppState.inventoryLogs.filter(l => l.branchId === curBranch.id).reverse();
+
+  const holder = document.getElementById('modals-placeholder');
+  holder.innerHTML = `
+    <div id="modal-inv-logs" class="fixed inset-0 modal-overlay flex items-center justify-center p-3 sm:p-4 z-50">
+      <div class="glass-panel w-full max-w-2xl max-h-[88vh] overflow-y-auto p-4 sm:p-6 rounded-2xl border border-slate-300 animate-fade-in space-y-4 shadow-xl">
+        <div class="flex items-center justify-between border-b border-slate-200 pb-3">
+          <div>
+            <h3 class="font-bold text-slate-800 text-base">سجل حركة المستودع (إدخال وإخراج)</h3>
+            <p class="text-xs text-slate-500">${curBranch.name}</p>
+          </div>
+          <button onclick="closeModalDirect('modal-inv-logs')" class="text-slate-400 hover:text-slate-700"><i data-lucide="x" class="w-5 h-5"></i></button>
+        </div>
+
+        <div class="overflow-x-auto">
+          <table class="w-full text-right text-xs text-slate-700">
+            <thead class="bg-slate-50 text-amber-700 font-bold border-b border-slate-200">
+              <tr>
+                <th class="p-2">التاريخ</th>
+                <th class="p-2">المستحضر</th>
+                <th class="p-2">نوع الحركة</th>
+                <th class="p-2 text-center">الكمية</th>
+                <th class="p-2">المرجع / الملاحظة</th>
+              </tr>
+            </thead>
+            <tbody class="divide-y divide-slate-100">
+              ${logs.length === 0 ? '<tr><td colspan="5" class="p-6 text-center text-slate-400">لا توجد حركات مسجلة بعد</td></tr>' : 
+                logs.map(l => `
+                  <tr class="hover:bg-slate-50">
+                    <td class="p-2">${l.date}</td>
+                    <td class="p-2 font-bold text-slate-800">${l.productName}</td>
+                    <td class="p-2">
+                      <span class="px-2 py-0.5 rounded text-[10px] font-bold ${l.type === 'inbound_restock' ? 'bg-emerald-100 text-emerald-700' : 'bg-blue-100 text-blue-700'}">
+                        ${l.type === 'inbound_restock' ? 'إدخال وتوريد' : 'صرف ومبيع كاشير'}
+                      </span>
+                    </td>
+                    <td class="p-2 text-center font-bold ${l.type === 'inbound_restock' ? 'text-emerald-600' : 'text-blue-600'}">
+                      ${l.type === 'inbound_restock' ? '+' : '-'}${l.quantity}
+                    </td>
+                    <td class="p-2 text-slate-500">${l.note} (${l.id})</td>
+                  </tr>
+                `).join('')}
+            </tbody>
+          </table>
+        </div>
+
+        <div class="pt-2 text-left">
+          <button onclick="closeModalDirect('modal-inv-logs')" class="bg-slate-100 hover:bg-slate-200 text-slate-700 px-4 py-2 rounded-xl font-semibold text-xs">إغلاق</button>
+        </div>
+      </div>
+    </div>
+  `;
+  if (window.lucide) window.lucide.createIcons();
+}
 
 // --- 7. EMPLOYEES & SALARIES ---
 function renderEmployeesHTML() {
@@ -1524,71 +2071,171 @@ function renderEmployeesHTML() {
 
 function bindEmployeesEvents() {}
 
-// --- 8. REPORTS ---
-function renderReportsHTML() {
-  const getBranchStats = (bId) => {
-    const receipts = AppState.receipts.filter(r => r.branchId === bId);
-    const bills = AppState.bills.filter(b => b.branchId === bId);
-    const rev = receipts.reduce((s, r) => s + r.total, 0);
-    const exp = bills.reduce((s, b) => s + b.amount, 0);
-    return { rev, exp, net: rev - exp, count: receipts.length };
-  };
+// --- 8. MANAGEMENT REPORTS (CATEGORIZED: DAILY, MONTHLY, YEARLY PROFITS) ---
+function setReportsPeriod(period) {
+  reportsPeriod = period;
+  const mainContainer = document.getElementById('app-main-content');
+  if (mainContainer && currentView === 'reports') {
+    mainContainer.innerHTML = renderReportsHTML();
+    if (window.lucide) window.lucide.createIcons();
+    filterReportsCalculations();
+  }
+}
 
-  const homs = getBranchStats('br-1');
-  const wadi = getBranchStats('br-2');
-  const totalRev = homs.rev + wadi.rev;
-  const totalExp = homs.exp + wadi.exp;
-  const totalNet = totalRev - totalExp;
+function renderReportsHTML() {
+  const today = getTodayDateString();
+  const currentMonth = today.substring(0, 7);
+  const currentYear = today.substring(0, 4);
 
   return `
     <div class="space-y-4 md:space-y-6 animate-fade-in">
-      <div>
-        <h2 class="text-xl md:text-2xl font-black text-slate-800">التقارير المالية ومقارنة الفروع</h2>
-        <p class="text-xs text-slate-500">تحليل الأداء المالي، المبيعات والمصاريف لكل فرع</p>
+      <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+        <div>
+          <h2 class="text-xl md:text-2xl font-black text-slate-800">التقارير المالية والأرباح الصافية</h2>
+          <p class="text-xs text-slate-500">تحليل الأداء المالي، الإيرادات، والمصاريف مصنفة دورياً</p>
+        </div>
+
+        <div class="flex items-center bg-white p-1 rounded-xl border border-slate-200 shadow-sm self-start sm:self-auto">
+          <button type="button" onclick="setReportsPeriod('daily')" class="px-3 py-1.5 rounded-lg text-xs font-bold transition ${reportsPeriod === 'daily' ? 'bg-amber-500 text-white shadow-sm' : 'text-slate-600 hover:text-amber-600'}">اليومي</button>
+          <button type="button" onclick="setReportsPeriod('monthly')" class="px-3 py-1.5 rounded-lg text-xs font-bold transition ${reportsPeriod === 'monthly' ? 'bg-amber-500 text-white shadow-sm' : 'text-slate-600 hover:text-amber-600'}">الشهري</button>
+          <button type="button" onclick="setReportsPeriod('yearly')" class="px-3 py-1.5 rounded-lg text-xs font-bold transition ${reportsPeriod === 'yearly' ? 'bg-amber-500 text-white shadow-sm' : 'text-slate-600 hover:text-amber-600'}">السنوي</button>
+        </div>
       </div>
 
+      <!-- Date Period Picker for Reports -->
+      <div class="flex items-center gap-3 bg-white p-3 rounded-xl border border-slate-200 shadow-sm max-w-sm">
+        <span class="text-xs text-slate-600 font-bold whitespace-nowrap">فترة الحساب:</span>
+        ${renderReportsPeriodInput(today, currentMonth, currentYear)}
+      </div>
+
+      <!-- Financial Totals Cards for Period -->
       <div class="grid grid-cols-1 sm:grid-cols-3 gap-3 md:gap-4">
         <div class="glass-panel p-4 border-emerald-200">
-          <p class="text-xs text-slate-500">إجمالي إيرادات الصالون</p>
-          <h3 class="text-lg md:text-xl font-extrabold text-emerald-600 mt-1">${formatCurrency(totalRev)}</h3>
+          <p class="text-xs text-slate-500">إيرادات الفترة</p>
+          <h3 id="rep-total-revenue" class="text-lg md:text-xl font-extrabold text-emerald-600 mt-1">0 SYP</h3>
         </div>
         <div class="glass-panel p-4 border-rose-200">
-          <p class="text-xs text-slate-500">إجمالي المصاريف المجمعة</p>
-          <h3 class="text-lg md:text-xl font-extrabold text-rose-600 mt-1">${formatCurrency(totalExp)}</h3>
+          <p class="text-xs text-slate-500">مصاريف الفترة</p>
+          <h3 id="rep-total-expenses" class="text-lg md:text-xl font-extrabold text-rose-600 mt-1">0 SYP</h3>
         </div>
         <div class="glass-panel p-4 border-amber-200">
-          <p class="text-xs text-slate-500">صافي أرباح الفروع معاً</p>
-          <h3 class="text-lg md:text-xl font-extrabold text-amber-600 mt-1">${formatCurrency(totalNet)}</h3>
+          <p class="text-xs text-slate-500">صافي الربح للفترة</p>
+          <h3 id="rep-total-net" class="text-lg md:text-xl font-extrabold text-amber-600 mt-1">0 SYP</h3>
         </div>
       </div>
 
+      <!-- Side-by-Side Branch Performance for Period -->
       <div class="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-6">
         <div class="glass-panel p-4 md:p-5 space-y-3 md:space-y-4 border-t-4 border-amber-500">
           <div class="flex items-center justify-between border-b border-slate-100 pb-2">
             <h3 class="font-black text-base text-slate-800">📍 فرع حمص</h3>
-            <span class="text-xs bg-amber-100 text-amber-800 px-2 py-0.5 rounded font-bold">${homs.count} فواتير</span>
+            <span id="rep-homs-count" class="text-xs bg-amber-100 text-amber-800 px-2 py-0.5 rounded font-bold">0 فواتير</span>
           </div>
           <div class="space-y-2 text-xs">
-            <div class="flex justify-between p-2 bg-slate-50 rounded"><span>الإيرادات:</span><b class="text-emerald-600">${formatCurrency(homs.rev)}</b></div>
-            <div class="flex justify-between p-2 bg-slate-50 rounded"><span>المصاريف:</span><b class="text-rose-600">${formatCurrency(homs.exp)}</b></div>
-            <div class="flex justify-between p-2.5 bg-amber-50 rounded font-bold text-sm"><span>صافي الربح:</span><b class="text-amber-700">${formatCurrency(homs.net)}</b></div>
+            <div class="flex justify-between p-2 bg-slate-50 rounded"><span>الإيرادات:</span><b id="rep-homs-rev" class="text-emerald-600">0</b></div>
+            <div class="flex justify-between p-2 bg-slate-50 rounded"><span>المصاريف:</span><b id="rep-homs-exp" class="text-rose-600">0</b></div>
+            <div class="flex justify-between p-2.5 bg-amber-50 rounded font-bold text-sm"><span>صافي الربح:</span><b id="rep-homs-net" class="text-amber-700">0</b></div>
           </div>
         </div>
 
         <div class="glass-panel p-4 md:p-5 space-y-3 md:space-y-4 border-t-4 border-blue-500">
           <div class="flex items-center justify-between border-b border-slate-100 pb-2">
             <h3 class="font-black text-base text-slate-800">📍 فرع الوادي</h3>
-            <span class="text-xs bg-blue-100 text-blue-800 px-2 py-0.5 rounded font-bold">${wadi.count} فواتير</span>
+            <span id="rep-wadi-count" class="text-xs bg-blue-100 text-blue-800 px-2 py-0.5 rounded font-bold">0 فواتير</span>
           </div>
           <div class="space-y-2 text-xs">
-            <div class="flex justify-between p-2 bg-slate-50 rounded"><span>الإيرادات:</span><b class="text-emerald-600">${formatCurrency(wadi.rev)}</b></div>
-            <div class="flex justify-between p-2 bg-slate-50 rounded"><span>المصاريف:</span><b class="text-rose-600">${formatCurrency(wadi.exp)}</b></div>
-            <div class="flex justify-between p-2.5 bg-blue-50 rounded font-bold text-sm"><span>صافي الربح:</span><b class="text-blue-700">${formatCurrency(wadi.net)}</b></div>
+            <div class="flex justify-between p-2 bg-slate-50 rounded"><span>الإيرادات:</span><b id="rep-wadi-rev" class="text-emerald-600">0</b></div>
+            <div class="flex justify-between p-2 bg-slate-50 rounded"><span>المصاريف:</span><b id="rep-wadi-exp" class="text-rose-600">0</b></div>
+            <div class="flex justify-between p-2.5 bg-blue-50 rounded font-bold text-sm"><span>صافي الربح:</span><b id="rep-wadi-net" class="text-blue-700">0</b></div>
           </div>
         </div>
       </div>
     </div>
   `;
+}
+
+function renderReportsPeriodInput(today, currentMonth, currentYear) {
+  if (reportsPeriod === 'daily') {
+    return `<input type="date" id="reports-period-filter" value="${today}" onchange="filterReportsCalculations()" class="bg-slate-50 border border-slate-300 rounded-lg px-2 py-1 text-xs text-slate-700 flex-1">`;
+  } else if (reportsPeriod === 'monthly') {
+    return `<input type="month" id="reports-period-filter" value="${currentMonth}" onchange="filterReportsCalculations()" class="bg-slate-50 border border-slate-300 rounded-lg px-2 py-1 text-xs text-slate-700 flex-1">`;
+  } else {
+    return `
+      <select id="reports-period-filter" onchange="filterReportsCalculations()" class="bg-slate-50 border border-slate-300 rounded-lg px-2 py-1 text-xs text-slate-700 flex-1">
+        <option value="${currentYear}" selected>${currentYear}</option>
+        <option value="2025">2025</option>
+        <option value="2024">2024</option>
+      </select>
+    `;
+  }
+}
+
+function filterReportsCalculations() {
+  const periodEl = document.getElementById('reports-period-filter');
+  let periodVal = periodEl ? periodEl.value : "";
+  
+  if (!periodVal) {
+    const today = getTodayDateString();
+    periodVal = reportsPeriod === 'daily' ? today : reportsPeriod === 'monthly' ? today.substring(0, 7) : today.substring(0, 4);
+    if (periodEl) periodEl.value = periodVal;
+  }
+
+  const getBranchPeriodStats = (bId) => {
+    let receipts = AppState.receipts.filter(r => r.branchId === bId);
+    let bills = AppState.bills.filter(b => b.branchId === bId);
+
+    if (reportsPeriod === 'daily') {
+      receipts = receipts.filter(r => r.date.startsWith(periodVal));
+      bills = bills.filter(b => b.date.startsWith(periodVal));
+    } else if (reportsPeriod === 'monthly') {
+      receipts = receipts.filter(r => r.date.substring(0, 7) === periodVal.substring(0, 7));
+      bills = bills.filter(b => b.date.substring(0, 7) === periodVal.substring(0, 7));
+    } else if (reportsPeriod === 'yearly') {
+      receipts = receipts.filter(r => r.date.substring(0, 4) === periodVal.substring(0, 4));
+      bills = bills.filter(b => b.date.substring(0, 4) === periodVal.substring(0, 4));
+    }
+
+    const rev = receipts.reduce((s, r) => s + r.total, 0);
+    const exp = bills.reduce((s, b) => s + b.amount, 0);
+    return { rev, exp, net: rev - exp, count: receipts.length };
+  };
+
+  const homs = getBranchPeriodStats('br-1');
+  const wadi = getBranchPeriodStats('br-2');
+  const totalRev = homs.rev + wadi.rev;
+  const totalExp = homs.exp + wadi.exp;
+  const totalNet = totalRev - totalExp;
+
+  const revEl = document.getElementById('rep-total-revenue');
+  const expEl = document.getElementById('rep-total-expenses');
+  const netEl = document.getElementById('rep-total-net');
+  if (revEl) revEl.textContent = formatCurrency(totalRev);
+  if (expEl) expEl.textContent = formatCurrency(totalExp);
+  if (netEl) netEl.textContent = formatCurrency(totalNet);
+
+  // Update Branch 1 (Homs)
+  const hRev = document.getElementById('rep-homs-rev');
+  const hExp = document.getElementById('rep-homs-exp');
+  const hNet = document.getElementById('rep-homs-net');
+  const hCnt = document.getElementById('rep-homs-count');
+  if (hRev) hRev.textContent = formatCurrency(homs.rev);
+  if (hExp) hExp.textContent = formatCurrency(homs.exp);
+  if (hNet) hNet.textContent = formatCurrency(homs.net);
+  if (hCnt) hCnt.textContent = `${homs.count} فواتير`;
+
+  // Update Branch 2 (Al-Wadi)
+  const wRev = document.getElementById('rep-wadi-rev');
+  const wExp = document.getElementById('rep-wadi-exp');
+  const wNet = document.getElementById('rep-wadi-net');
+  const wCnt = document.getElementById('rep-wadi-count');
+  if (wRev) wRev.textContent = formatCurrency(wadi.rev);
+  if (wExp) wExp.textContent = formatCurrency(wadi.exp);
+  if (wNet) wNet.textContent = formatCurrency(wadi.net);
+  if (wCnt) wCnt.textContent = `${wadi.count} فواتير`;
+}
+
+function bindReportsEvents() {
+  filterReportsCalculations();
 }
 
 document.addEventListener('DOMContentLoaded', () => {
