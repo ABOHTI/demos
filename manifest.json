@@ -1,0 +1,10 @@
+{
+  "name": "SalonLove - POS & Management",
+  "short_name": "SalonLove",
+  "description": "Comprehensive Management System for SalonLove - Appointments, POS, Payroll, Bills & Inventory",
+  "start_url": "./index.html",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#d97706",
+  "orientation": "any"
+}
