@@ -2,7 +2,6 @@
   "name": "damascus-jasmine-salon",
   "version": "1.0.0",
   "description": "Comprehensive Syrian Salon Management System - Appointments, POS Billing, Monthly Bills, Inventory, Staff Salaries & Commission, and Financial Audit Log",
-  "main": "server.js",
   "scripts": {
     "start": "node server.js",
     "serve": "node server.js"
