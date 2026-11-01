@@ -1,9 +1,14 @@
-/* SalonLove - Full Application Logic (Light Mode & English Numerals) */
+/* SalonLove - Multi-Branch Architecture & Manager-Restricted Switching */
 
 const DEFAULT_STATE = {
   isAdminLocked: true,
   adminPin: "1234",
-  cashierName: "SalonLove Cashier",
+  cashierName: "كاشير SalonLove",
+  activeBranchId: "br-1",
+  branches: [
+    { id: "br-1", name: "فرع الشعلان", address: "دمشق - الشعلان / شارع 29 أيار", phone: "011-2233445" },
+    { id: "br-2", name: "فرع أبو رمانة", address: "دمشق - أبو رمانة / ساحة المدفع", phone: "011-3344556" }
+  ],
   services: [
     { id: "srv-1", name: "قص شعر وتصفيف (نسائي)", price: 75000, category: "خدمات الشعر", duration: "45 min" },
     { id: "srv-2", name: "سشوار وتسريحة فخمة", price: 50000, category: "خدمات الشعر", duration: "30 min" },
@@ -15,25 +20,26 @@ const DEFAULT_STATE = {
     { id: "srv-8", name: "قص شعر وحلاقة ذقن (رجالي)", price: 45000, category: "رجالي", duration: "30 min" }
   ],
   inventory: [
-    { id: "inv-1", name: "شامبو لوريال بروفيسيونال 1000ml", category: "عناية بالشعر", stock: 12, minStock: 3, costPrice: 110000, sellPrice: 150000 },
-    { id: "inv-2", name: "صبغة لاكمي إسباني ألوان متعددة", category: "صبغات ومستحضرات", stock: 25, minStock: 5, costPrice: 28000, sellPrice: 40000 },
-    { id: "inv-3", name: "سيروم الكيراتين البرازيلي الأصلي", category: "عناية بالشعر", stock: 2, minStock: 4, costPrice: 95000, sellPrice: 135000 },
-    { id: "inv-4", name: "زيت أرغان مغربي فاخر 100ml", category: "عناية بالبشرة", stock: 8, minStock: 3, costPrice: 45000, sellPrice: 70000 },
-    { id: "inv-5", name: "طلاء أظافر جيل OPI متعدّد", category: "أظافر وتجميل", stock: 18, minStock: 5, costPrice: 18000, sellPrice: 30000 }
+    { id: "inv-1", name: "شامبو لوريال بروفيسيونال 1000ml", category: "عناية بالشعر", stocks: { "br-1": 12, "br-2": 8 }, minStock: 3, costPrice: 110000, sellPrice: 150000 },
+    { id: "inv-2", name: "صبغة لاكمي إسباني ألوان متعددة", category: "صبغات ومستحضرات", stocks: { "br-1": 25, "br-2": 14 }, minStock: 5, costPrice: 28000, sellPrice: 40000 },
+    { id: "inv-3", name: "سيروم الكيراتين البرازيلي الأصلي", category: "عناية بالشعر", stocks: { "br-1": 2, "br-2": 5 }, minStock: 4, costPrice: 95000, sellPrice: 135000 },
+    { id: "inv-4", name: "زيت أرغان مغربي فاخر 100ml", category: "عناية بالبشرة", stocks: { "br-1": 8, "br-2": 3 }, minStock: 3, costPrice: 45000, sellPrice: 70000 },
+    { id: "inv-5", name: "طلاء أظافر جيل OPI متعدّد", category: "أظافر وتجميل", stocks: { "br-1": 18, "br-2": 20 }, minStock: 5, costPrice: 18000, sellPrice: 30000 }
   ],
   employees: [
-    { id: "emp-1", name: "ريم الأحمد", role: "خبيرة قص وتصفيف", phone: "0933112233", payType: "both", fixedSalary: 600000, commissionRate: 15 },
-    { id: "emp-2", name: "نور الشام", role: "أخصائية بشرة ومكياج", phone: "0944556677", payType: "commission", fixedSalary: 0, commissionRate: 25 },
-    { id: "emp-3", name: "سامر الحلبي", role: "حلاق ومصفف رجالي", phone: "0955889900", payType: "both", fixedSalary: 500000, commissionRate: 20 },
-    { id: "emp-4", name: "ميساء حمصي", role: "موظفة استقبال وكاشير", phone: "0988112244", payType: "salary", fixedSalary: 750000, commissionRate: 0 }
+    { id: "emp-1", branchId: "br-1", name: "ريم الأحمد", role: "قص وتصفيف", phone: "0933112233", payType: "both", fixedSalary: 600000, commissionRate: 15 },
+    { id: "emp-2", branchId: "br-1", name: "نور الشام", role: "بشرة ومكياج", phone: "0944556677", payType: "commission", fixedSalary: 0, commissionRate: 25 },
+    { id: "emp-3", branchId: "br-2", name: "سامر الحلبي", role: "حلاق ومصفف", phone: "0955889900", payType: "both", fixedSalary: 500000, commissionRate: 20 },
+    { id: "emp-4", branchId: "br-2", name: "ميساء حمصي", role: "استقبال وكاشير", phone: "0988112244", payType: "salary", fixedSalary: 750000, commissionRate: 0 }
   ],
   appointments: [
-    { id: "apt-101", customerName: "سارة الزين", phone: "0991234567", date: getTodayDateString(), time: "14:00", serviceId: "srv-3", serviceName: "صبغة شعر كاملة + خصل", employeeId: "emp-1", employeeName: "ريم الأحمد", price: 250000, status: "confirmed" },
-    { id: "apt-102", customerName: "هدى دروبي", phone: "0933445566", date: getTodayDateString(), time: "16:30", serviceId: "srv-5", serviceName: "تنظيف بشرة هيدرافيسيال", employeeId: "emp-2", employeeName: "نور الشام", price: 180000, status: "pending" }
+    { id: "apt-101", branchId: "br-1", customerName: "سارة الزين", phone: "0991234567", date: getTodayDateString(), time: "14:00", serviceId: "srv-3", serviceName: "صبغة شعر كاملة + خصل", employeeId: "emp-1", employeeName: "ريم الأحمد", price: 250000, status: "confirmed" },
+    { id: "apt-102", branchId: "br-2", customerName: "هدى دروبي", phone: "0933445566", date: getTodayDateString(), time: "16:30", serviceId: "srv-5", serviceName: "تنظيف بشرة هيدرافيسيال", employeeId: "emp-3", employeeName: "سامر الحلبي", price: 180000, status: "pending" }
   ],
   receipts: [
     {
       id: "INV-9001",
+      branchId: "br-1",
       date: getTodayDateString() + " 11:30",
       customerName: "منى الكردي",
       employeeId: "emp-1",
@@ -49,6 +55,7 @@ const DEFAULT_STATE = {
     },
     {
       id: "INV-9002",
+      branchId: "br-2",
       date: getTodayDateString() + " 12:45",
       customerName: "عمر السوري",
       employeeId: "emp-3",
@@ -63,9 +70,9 @@ const DEFAULT_STATE = {
     }
   ],
   bills: [
-    { id: "bill-1", title: "فاتورة كهرباء الصالون - تشرين", category: "كهرباء", amount: 350000, date: getTodayDateString(), status: "مدفوعة" },
-    { id: "bill-2", title: "شراء مازوت للمولدة الكهربائية (200L)", category: "مازوت/محروقات", amount: 1200000, date: getTodayDateString(), status: "مدفوعة" },
-    { id: "bill-3", title: "إيجار مقسم الصالون الشهري", category: "إيجار", amount: 2500000, date: getTodayDateString(), status: "غير مدفوعة" }
+    { id: "bill-1", branchId: "br-1", title: "فاتورة كهرباء فرع الشعلان", category: "كهرباء", amount: 350000, date: getTodayDateString(), status: "مدفوعة" },
+    { id: "bill-2", branchId: "br-1", title: "شراء مازوت مولدة الشعلان (200L)", category: "مازوت/محروقات", amount: 1200000, date: getTodayDateString(), status: "مدفوعة" },
+    { id: "bill-3", branchId: "br-2", title: "إيجار مقسم أبو رمانة الشهري", category: "إيجار", amount: 2500000, date: getTodayDateString(), status: "غير مدفوعة" }
   ]
 };
 
@@ -82,7 +89,7 @@ function getTodayDateString() {
 
 function loadState() {
   try {
-    const saved = localStorage.getItem('salonlove_app_state');
+    const saved = localStorage.getItem('salonlove_multibranch_state');
     if (saved) return JSON.parse(saved);
   } catch (e) {
     console.error("Error loading state", e);
@@ -92,24 +99,79 @@ function loadState() {
 
 function saveState() {
   try {
-    localStorage.setItem('salonlove_app_state', JSON.stringify(AppState));
+    localStorage.setItem('salonlove_multibranch_state', JSON.stringify(AppState));
   } catch (e) {
     console.error("Error saving state", e);
   }
 }
 
-// Utility: Format currency using English numerals (en-US)
 function formatCurrency(amount) {
   return Number(amount || 0).toLocaleString('en-US') + " SYP";
 }
 
-// Realtime Clock & System Init
+function getActiveBranch() {
+  return AppState.branches.find(b => b.id === AppState.activeBranchId) || AppState.branches[0];
+}
+
+function filterByBranch(list) {
+  return list.filter(item => item.branchId === AppState.activeBranchId);
+}
+
+// Branch Switching Restricted to Manager Mode
+function handleBranchChangeAttempt(targetBranchId) {
+  if (AppState.isAdminLocked) {
+    const sel = document.getElementById('branch-selector');
+    if (sel) sel.value = AppState.activeBranchId;
+    openAdminPinModal(null, targetBranchId);
+    return;
+  }
+  executeBranchSwitch(targetBranchId);
+}
+
+function executeBranchSwitch(newBranchId) {
+  AppState.activeBranchId = newBranchId;
+  saveState();
+  updateBranchHeaderUI();
+  updateBadges();
+  switchView(currentView);
+}
+
+function updateBranchHeaderUI() {
+  const sel = document.getElementById('branch-selector');
+  if (sel) {
+    sel.value = AppState.activeBranchId;
+    if (AppState.isAdminLocked) {
+      sel.disabled = true;
+      sel.className = "bg-slate-100 border border-slate-300 text-slate-500 text-xs font-bold rounded-lg px-2 py-1 focus:outline-none cursor-not-allowed opacity-80";
+    } else {
+      sel.disabled = false;
+      sel.className = "bg-amber-50 border border-amber-300 text-amber-900 text-xs font-bold rounded-lg px-2 py-1 focus:outline-none cursor-pointer";
+    }
+  }
+
+  const icon = document.getElementById('branch-pin-icon');
+  if (icon) {
+    icon.setAttribute('data-lucide', AppState.isAdminLocked ? 'lock' : 'map-pin');
+    icon.className = AppState.isAdminLocked ? 'w-3.5 h-3.5 text-slate-400' : 'w-3.5 h-3.5 text-amber-600';
+  }
+
+  const label = document.getElementById('current-branch-label');
+  if (label) {
+    const cur = getActiveBranch();
+    label.textContent = cur.name;
+  }
+
+  if (window.lucide) window.lucide.createIcons();
+}
+
+// App Initialization
 function initApp() {
   updateClock();
   setInterval(updateClock, 1000);
   setupNavigation();
   setupAdminLock();
   setupBackupButton();
+  updateBranchHeaderUI();
   updateBadges();
   switchView('dashboard');
 }
@@ -118,7 +180,6 @@ function updateClock() {
   const clockEl = document.getElementById('live-clock');
   if (clockEl) {
     const now = new Date();
-    // Use en-GB to guarantee English numerals (00:00:00 24h format)
     clockEl.textContent = now.toLocaleTimeString('en-GB', { hour12: false });
   }
 }
@@ -183,22 +244,22 @@ function switchView(viewName) {
       break;
   }
 
-  if (window.lucide) {
-    window.lucide.createIcons();
-  }
+  if (window.lucide) window.lucide.createIcons();
 }
 
 function updateBadges() {
   const apptBadge = document.getElementById('nav-badge-appointments');
   if (apptBadge) {
     const today = getTodayDateString();
-    const count = AppState.appointments.filter(a => a.date === today && a.status !== 'cancelled').length;
+    const appts = filterByBranch(AppState.appointments);
+    const count = appts.filter(a => a.date === today && a.status !== 'cancelled').length;
     apptBadge.textContent = count.toString();
   }
 
   const invBadge = document.getElementById('nav-badge-inventory');
   if (invBadge) {
-    const lowCount = AppState.inventory.filter(i => i.stock <= i.minStock).length;
+    const branchKey = AppState.activeBranchId;
+    const lowCount = AppState.inventory.filter(i => (i.stocks[branchKey] || 0) <= i.minStock).length;
     if (lowCount > 0) {
       invBadge.classList.remove('hidden');
       invBadge.textContent = lowCount.toString();
@@ -208,7 +269,7 @@ function updateBadges() {
   }
 }
 
-// Admin Security Pin Modal Handlers
+// Manager Security PIN
 function setupAdminLock() {
   const lockBtn = document.getElementById('toggle-admin-lock-btn');
   if (lockBtn) {
@@ -224,6 +285,16 @@ function setupAdminLock() {
       }
     });
   }
+
+  const branchWrapper = document.getElementById('branch-switch-wrapper');
+  if (branchWrapper) {
+    branchWrapper.addEventListener('click', () => {
+      if (AppState.isAdminLocked) {
+        openAdminPinModal();
+      }
+    });
+  }
+
   updateAdminLockUI();
 }
 
@@ -241,11 +312,15 @@ function updateAdminLockUI() {
     label.textContent = "وضع المدير: مفتوح";
     document.querySelectorAll('.admin-only').forEach(el => el.classList.remove('opacity-50'));
   }
+
+  updateBranchHeaderUI();
   if (window.lucide) window.lucide.createIcons();
 }
 
-function openAdminPinModal(targetViewAfterSuccess = null) {
+function openAdminPinModal(targetViewAfterSuccess = null, pendingBranchAfterSuccess = null) {
   window.pendingTargetView = targetViewAfterSuccess;
+  window.pendingBranchSwitch = pendingBranchAfterSuccess;
+
   const modalsHolder = document.getElementById('modals-placeholder');
   modalsHolder.innerHTML = `
     <div id="admin-pin-modal" class="fixed inset-0 modal-overlay flex items-center justify-center p-4 z-50">
@@ -255,7 +330,7 @@ function openAdminPinModal(targetViewAfterSuccess = null) {
         </div>
         <div>
           <h3 class="font-bold text-slate-800 text-base">دخول المدير (Admin PIN)</h3>
-          <p class="text-xs text-slate-500 mt-1">الرجاء إدخال الرمز السري (الافتراضي: 1234)</p>
+          <p class="text-xs text-slate-500 mt-1">التبديل بين الفروع مخصص للمدير فقط (PIN: 1234)</p>
         </div>
         <input type="password" id="admin-pin-input" maxlength="6" placeholder="••••" class="w-full text-center text-2xl font-mono tracking-widest bg-slate-50 border border-slate-300 rounded-xl p-3 text-amber-600 focus:outline-none focus:border-amber-500">
         <div class="flex gap-2">
@@ -278,6 +353,12 @@ function verifyAdminPin() {
     AppState.isAdminLocked = false;
     updateAdminLockUI();
     closeModalDirect('admin-pin-modal');
+
+    if (window.pendingBranchSwitch) {
+      executeBranchSwitch(window.pendingBranchSwitch);
+      window.pendingBranchSwitch = null;
+    }
+
     if (window.pendingTargetView) {
       switchView(window.pendingTargetView);
       window.pendingTargetView = null;
@@ -308,24 +389,28 @@ function setupBackupButton() {
   }
 }
 
-// --- 1. DASHBOARD VIEW RENDERER ---
+// --- 1. DASHBOARD ---
 function renderDashboardHTML() {
   const today = getTodayDateString();
-  const todayReceipts = AppState.receipts.filter(r => r.date.startsWith(today));
-  const todaySalesTotal = todayReceipts.reduce((sum, r) => sum + r.total, 0);
-  const todayAppts = AppState.appointments.filter(a => a.date === today);
-  const monthlyBillsTotal = AppState.bills.reduce((sum, b) => sum + b.amount, 0);
+  const curBranch = getActiveBranch();
+  const branchReceipts = filterByBranch(AppState.receipts).filter(r => r.date.startsWith(today));
+  const todaySalesTotal = branchReceipts.reduce((sum, r) => sum + r.total, 0);
+  const todayAppts = filterByBranch(AppState.appointments).filter(a => a.date === today);
+  const monthlyBillsTotal = filterByBranch(AppState.bills).reduce((sum, b) => sum + b.amount, 0);
 
   return `
     <div class="space-y-6 animate-fade-in">
       <div class="flex items-center justify-between">
         <div>
-          <h2 class="text-2xl font-black text-slate-800">SalonLove لوحة التحكم</h2>
-          <p class="text-xs text-slate-500">متابعة المبيعات والحجوزات والمخزون اليومي</p>
+          <div class="flex items-center gap-2">
+            <h2 class="text-2xl font-black text-slate-800">لوحة التحكم</h2>
+            <span class="px-2.5 py-0.5 rounded-full text-xs font-bold bg-amber-100 text-amber-800 border border-amber-300">${curBranch.name}</span>
+          </div>
+          <p class="text-xs text-slate-500 mt-0.5">متابعة المبيعات والحجوزات والمخزون الحالي</p>
         </div>
         <div class="flex gap-2">
           <button onclick="switchView('pos')" class="gold-gradient-btn px-4 py-2 rounded-xl text-xs flex items-center gap-2">
-            <i data-lucide="plus-circle" class="w-4 h-4"></i><span>فاتورة جديدة</span>
+            <i data-lucide="plus-circle" class="w-4 h-4"></i><span>فاتورة جديدة (${curBranch.name})</span>
           </button>
         </div>
       </div>
@@ -333,7 +418,7 @@ function renderDashboardHTML() {
       <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
         <div class="glass-panel p-4 flex items-center justify-between border-amber-200">
           <div>
-            <p class="text-xs text-slate-500">إيرادات اليوم</p>
+            <p class="text-xs text-slate-500">إيرادات اليوم (${curBranch.name})</p>
             <h3 class="text-xl font-bold text-amber-600 mt-1">${formatCurrency(todaySalesTotal)}</h3>
           </div>
           <div class="w-12 h-12 bg-amber-50 rounded-xl flex items-center justify-center text-amber-600">
@@ -342,7 +427,7 @@ function renderDashboardHTML() {
         </div>
         <div class="glass-panel p-4 flex items-center justify-between border-blue-200">
           <div>
-            <p class="text-xs text-slate-500">مواعيد اليوم</p>
+            <p class="text-xs text-slate-500">مواعيد اليوم (${curBranch.name})</p>
             <h3 class="text-xl font-bold text-slate-800 mt-1">${todayAppts.length}</h3>
           </div>
           <div class="w-12 h-12 bg-blue-50 rounded-xl flex items-center justify-center text-blue-600">
@@ -366,7 +451,7 @@ function renderDashboardHTML() {
           <button onclick="switchView('appointments')" class="text-xs text-amber-600 hover:underline">عرض الكل</button>
         </div>
         <div class="space-y-2">
-          ${todayAppts.length === 0 ? '<p class="text-xs text-slate-400 py-4 text-center">لا توجد مواعيد مسجلة لليوم</p>' : 
+          ${todayAppts.length === 0 ? '<p class="text-xs text-slate-400 py-4 text-center">لا توجد مواعيد مسجلة لهذا الفرع اليوم</p>' : 
             todayAppts.map(apt => `
               <div class="flex items-center justify-between p-3 bg-slate-50 rounded-xl border border-slate-200 text-xs">
                 <div>
@@ -382,19 +467,21 @@ function renderDashboardHTML() {
   `;
 }
 
-// --- 2. POS & BILLING VIEW RENDERER & LOGIC ---
+// --- 2. POS VIEW ---
 function renderPOSHTML() {
-  const employeesOptions = AppState.employees.map(e => `<option value="${e.id}">${e.name} (${e.role})</option>`).join('');
+  const curBranch = getActiveBranch();
+  const branchEmployees = AppState.employees.filter(e => e.branchId === curBranch.id);
+  const employeesOptions = branchEmployees.map(e => `<option value="${e.id}">${e.name} (${e.role})</option>`).join('');
 
   return `
     <div class="space-y-6 animate-fade-in">
       <div class="flex items-center justify-between">
         <div>
           <h2 class="text-2xl font-black text-slate-800">نقطة البيع الكاشير (POS)</h2>
-          <p class="text-xs text-slate-500">إصدار الفواتير، حساب الخدمات والمنتجات وعمولات الكادر</p>
+          <p class="text-xs text-slate-500">إصدار فواتير وسداد لـ <span class="font-bold text-amber-700">${curBranch.name}</span></p>
         </div>
         <div class="flex items-center gap-2">
-          <span class="text-xs text-slate-500">الكاشير الحالي:</span>
+          <span class="text-xs text-slate-500">الكاشير:</span>
           <span class="text-xs font-bold text-amber-700 px-2 py-1 bg-amber-100 border border-amber-200 rounded-lg">${AppState.cashierName}</span>
         </div>
       </div>
@@ -480,15 +567,20 @@ function renderPOSHTML() {
 }
 
 function renderPOSCatalogItems(filterText = "") {
+  const branchKey = AppState.activeBranchId;
   const items = currentPosTab === 'services' ? AppState.services : AppState.inventory;
   const filtered = items.filter(i => i.name.toLowerCase().includes(filterText.toLowerCase()));
 
   return filtered.map(item => {
     const price = currentPosTab === 'services' ? item.price : item.sellPrice;
+    const stockNote = currentPosTab === 'products' ? `<span class="text-[10px] text-slate-400">المتوفر: ${item.stocks[branchKey] || 0}</span>` : '';
     return `
       <div onclick="addCartItem('${item.id}', '${currentPosTab}')" class="glass-panel p-3 rounded-xl cursor-pointer hover:border-amber-400 transition flex flex-col justify-between space-y-2">
         <div>
-          <span class="text-[10px] text-amber-700 font-semibold">${item.category || ''}</span>
+          <div class="flex items-center justify-between">
+            <span class="text-[10px] text-amber-700 font-semibold">${item.category || ''}</span>
+            ${stockNote}
+          </div>
           <h4 class="font-bold text-xs text-slate-800 line-clamp-2 mt-0.5">${item.name}</h4>
         </div>
         <div class="flex items-center justify-between pt-2 border-t border-slate-100">
@@ -612,11 +704,12 @@ function checkoutPOS(shouldPrint) {
     return;
   }
 
+  const curBranch = getActiveBranch();
   const customerName = document.getElementById('pos-customer-name')?.value || "زبون عام";
   const empSelect = document.getElementById('pos-employee-select');
   const employeeId = empSelect?.value || AppState.employees[0]?.id;
   const employeeObj = AppState.employees.find(e => e.id === employeeId);
-  const employeeName = employeeObj ? employeeObj.name : "موظف الصالون";
+  const employeeName = employeeObj ? employeeObj.name : "موظف SalonLove";
 
   const subtotal = calculatePosSubtotal();
   const discount = Number(document.getElementById('pos-discount-input')?.value || 0);
@@ -628,6 +721,7 @@ function checkoutPOS(shouldPrint) {
 
   const receipt = {
     id: newReceiptId,
+    branchId: curBranch.id,
     date: nowStr,
     customerName,
     employeeId,
@@ -644,8 +738,8 @@ function checkoutPOS(shouldPrint) {
   posCart.forEach(cartItem => {
     if (cartItem.type === 'products') {
       const invItem = AppState.inventory.find(i => i.id === cartItem.id);
-      if (invItem) {
-        invItem.stock = Math.max(0, invItem.stock - cartItem.qty);
+      if (invItem && invItem.stocks[curBranch.id] !== undefined) {
+        invItem.stocks[curBranch.id] = Math.max(0, invItem.stocks[curBranch.id] - cartItem.qty);
       }
     }
   });
@@ -664,20 +758,22 @@ function checkoutPOS(shouldPrint) {
 }
 
 function openReceiptModal(receipt) {
+  const branchObj = AppState.branches.find(b => b.id === receipt.branchId) || AppState.branches[0];
   const holder = document.getElementById('modals-placeholder');
   holder.innerHTML = `
     <div id="modal-receipt-view" class="fixed inset-0 modal-overlay flex items-center justify-center p-4 z-50">
       <div class="glass-panel w-full max-w-sm p-6 rounded-2xl border border-slate-300 space-y-4 animate-fade-in shadow-2xl">
         <div class="flex items-center justify-between border-b border-slate-200 pb-3">
-          <h3 class="font-bold text-slate-800 text-sm">إيصال حراري - SalonLove</h3>
+          <h3 class="font-bold text-slate-800 text-sm">إيصال حراري - SalonLove (${branchObj.name})</h3>
           <button onclick="closeModalDirect('modal-receipt-view')" class="text-slate-400 hover:text-slate-700"><i data-lucide="x" class="w-5 h-5"></i></button>
         </div>
 
         <div id="printable-receipt-area" class="bg-white text-slate-900 p-4 rounded-xl shadow-sm border border-slate-200 font-mono text-xs space-y-3">
           <div class="text-center border-b border-dashed border-slate-400 pb-2">
             <h2 class="font-black text-base text-amber-700">SalonLove</h2>
-            <p class="text-[10px]">دمشق - الشعلان / شارع 29 أيار</p>
-            <p class="text-[10px]">Tel: 011-2233445</p>
+            <p class="text-[11px] font-bold text-slate-800">${branchObj.name}</p>
+            <p class="text-[10px]">${branchObj.address}</p>
+            <p class="text-[10px]">Tel: ${branchObj.phone}</p>
           </div>
           <div class="text-[11px] space-y-0.5">
             <div class="flex justify-between"><span>رقم الفاتورة:</span><span class="font-bold">${receipt.id}</span></div>
@@ -735,6 +831,11 @@ function convertApptToPOS(apptId) {
     type: 'services'
   }];
 
+  if (AppState.activeBranchId !== apt.branchId) {
+    AppState.activeBranchId = apt.branchId;
+    updateBranchHeaderUI();
+  }
+
   switchView('pos');
   setTimeout(() => {
     const custInput = document.getElementById('pos-customer-name');
@@ -747,15 +848,16 @@ function convertApptToPOS(apptId) {
 
 function bindPOSEvents() {}
 
-// --- 3. APPOINTMENTS VIEW & LOGIC ---
+// --- 3. APPOINTMENTS ---
 function renderAppointmentsHTML() {
   const today = getTodayDateString();
+  const curBranch = getActiveBranch();
   return `
     <div class="space-y-6 animate-fade-in">
       <div class="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
           <h2 class="text-2xl font-black text-slate-800">نظام الحجوزات والمواعيد</h2>
-          <p class="text-xs text-slate-500">إدارة وتنظيم مواعيد زبائن SalonLove</p>
+          <p class="text-xs text-slate-500">حجوزات <span class="font-bold text-amber-700">${curBranch.name}</span></p>
         </div>
         <div class="flex items-center gap-3">
           <input type="date" id="appt-date-filter" value="${today}" onchange="filterAppointments()" class="bg-white border border-slate-300 rounded-xl px-3 py-2 text-xs text-slate-700">
@@ -788,7 +890,8 @@ function renderAppointmentsHTML() {
 }
 
 function renderAppointmentsRows(dateFilter = "") {
-  const list = dateFilter ? AppState.appointments.filter(a => a.date === dateFilter) : AppState.appointments;
+  let list = filterByBranch(AppState.appointments);
+  if (dateFilter) list = list.filter(a => a.date === dateFilter);
   if (list.length === 0) {
     return `<tr><td colspan="7" class="p-6 text-center text-slate-400">لا توجد مواعيد مسجلة</td></tr>`;
   }
@@ -819,15 +922,17 @@ function filterAppointments() {
 }
 
 function openNewAppointmentModal() {
+  const curBranch = getActiveBranch();
   const servicesOpt = AppState.services.map(s => `<option value="${s.id}" data-price="${s.price}">${s.name} (${formatCurrency(s.price)})</option>`).join('');
-  const empOpt = AppState.employees.map(e => `<option value="${e.id}">${e.name}</option>`).join('');
+  const branchEmployees = AppState.employees.filter(e => e.branchId === curBranch.id);
+  const empOpt = branchEmployees.map(e => `<option value="${e.id}">${e.name}</option>`).join('');
 
   const holder = document.getElementById('modals-placeholder');
   holder.innerHTML = `
     <div id="modal-appointment" class="fixed inset-0 modal-overlay flex items-center justify-center p-4 z-50">
       <div class="glass-panel w-full max-w-md p-6 rounded-2xl border border-slate-300 animate-fade-in space-y-4 shadow-xl">
         <div class="flex items-center justify-between border-b border-slate-200 pb-3">
-          <h3 class="font-bold text-slate-800 text-base">حجز موعد جديد في SalonLove</h3>
+          <h3 class="font-bold text-slate-800 text-base">حجز موعد (${curBranch.name})</h3>
           <button onclick="closeModalDirect('modal-appointment')" class="text-slate-400 hover:text-slate-700"><i data-lucide="x" class="w-5 h-5"></i></button>
         </div>
         <form onsubmit="saveNewAppointment(event)" class="space-y-3 text-xs">
@@ -874,6 +979,7 @@ function openNewAppointmentModal() {
 
 function saveNewAppointment(e) {
   e.preventDefault();
+  const branchId = AppState.activeBranchId;
   const customerName = document.getElementById('appt-customer-name').value;
   const phone = document.getElementById('appt-customer-phone').value;
   const date = document.getElementById('appt-date').value;
@@ -889,6 +995,7 @@ function saveNewAppointment(e) {
 
   AppState.appointments.push({
     id: `apt-${Date.now()}`,
+    branchId,
     customerName,
     phone,
     date,
@@ -927,7 +1034,7 @@ function deleteAppointment(id) {
 
 function bindAppointmentsEvents() {}
 
-// --- 4. RECEIPTS & TRANSACTIONS VIEW ---
+// --- 4. RECEIPTS ---
 function renderReceiptsHTML() {
   return `
     <div class="space-y-6 animate-fade-in">
@@ -970,7 +1077,7 @@ function renderReceiptsHTML() {
 }
 
 function renderReceiptsRows(methodFilter = "all", searchQ = "") {
-  let list = [...AppState.receipts].reverse();
+  let list = [...filterByBranch(AppState.receipts)].reverse();
   if (methodFilter !== "all") list = list.filter(r => r.paymentMethod === methodFilter);
   if (searchQ) {
     const q = searchQ.toLowerCase();
@@ -1005,17 +1112,18 @@ function filterReceiptsTable() {
 
 function bindReceiptsEvents() {}
 
-// --- 5. MONTHLY BILLS & EXPENSES VIEW ---
+// --- 5. BILLS & EXPENSES ---
 function renderBillsHTML() {
-  const totalBills = AppState.bills.reduce((sum, b) => sum + b.amount, 0);
-  const unpaidCount = AppState.bills.filter(b => b.status === 'غير مدفوعة').length;
+  const bills = filterByBranch(AppState.bills);
+  const totalBills = bills.reduce((sum, b) => sum + b.amount, 0);
+  const unpaidCount = bills.filter(b => b.status === 'غير مدفوعة').length;
 
   return `
     <div class="space-y-6 animate-fade-in">
       <div class="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
-          <h2 class="text-2xl font-black text-slate-800">المصاريف التشغيلية لـ SalonLove</h2>
-          <p class="text-xs text-slate-500">فواتير الكهرباء، محروقات المولدات، والإيجارات</p>
+          <h2 class="text-2xl font-black text-slate-800">المصاريف التشغيلية</h2>
+          <p class="text-xs text-slate-500">فواتير الكهرباء والمحروقات والإيجارات</p>
         </div>
         <button onclick="openNewBillModal()" class="gold-gradient-btn px-4 py-2 rounded-xl text-xs flex items-center gap-2">
           <i data-lucide="plus" class="w-4 h-4"></i><span>تسجيل مصروف جديد</span>
@@ -1025,7 +1133,7 @@ function renderBillsHTML() {
       <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
         <div class="glass-panel p-4 flex items-center justify-between border-rose-200">
           <div>
-            <p class="text-xs text-slate-500">إجمالي المصاريف الشهرية</p>
+            <p class="text-xs text-slate-500">إجمالي المصاريف</p>
             <h3 class="text-xl font-bold text-rose-600 mt-1">${formatCurrency(totalBills)}</h3>
           </div>
           <i data-lucide="calculator" class="w-8 h-8 text-rose-500/50"></i>
@@ -1059,7 +1167,7 @@ function renderBillsHTML() {
             </tr>
           </thead>
           <tbody class="divide-y divide-slate-100">
-            ${AppState.bills.map(b => `
+            ${bills.map(b => `
               <tr class="hover:bg-slate-50">
                 <td class="p-3 font-bold text-slate-800">${b.title}</td>
                 <td class="p-3">${b.category}</td>
@@ -1121,13 +1229,14 @@ function openNewBillModal() {
 
 function saveNewBill(e) {
   e.preventDefault();
+  const branchId = AppState.activeBranchId;
   const title = document.getElementById('bill-title').value;
   const category = document.getElementById('bill-category').value;
   const amount = Number(document.getElementById('bill-amount').value);
   const date = getTodayDateString();
   const status = "مدفوعة";
 
-  AppState.bills.push({ id: `bill-${Date.now()}`, title, category, amount, date, status });
+  AppState.bills.push({ id: `bill-${Date.now()}`, branchId, title, category, amount, date, status });
   saveState();
   closeModalDirect('modal-bill');
   if (currentView === 'bills') switchView('bills');
@@ -1152,14 +1261,16 @@ function deleteBill(id) {
 
 function bindBillsEvents() {}
 
-// --- 6. INVENTORY & SUPPLIES VIEW ---
+// --- 6. INVENTORY ---
 function renderInventoryHTML() {
+  const curBranch = getActiveBranch();
+
   return `
     <div class="space-y-6 animate-fade-in">
       <div class="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
-          <h2 class="text-2xl font-black text-slate-800">مخزون وتجهيزات SalonLove</h2>
-          <p class="text-xs text-slate-500">تتبع كميات المستحضرات والتنبيه عند النقص</p>
+          <h2 class="text-2xl font-black text-slate-800">مخزون المستحضرات والتجهيزات</h2>
+          <p class="text-xs text-slate-500">الكميات الحالية المتوفرة في مستودعات الفروع</p>
         </div>
       </div>
 
@@ -1168,17 +1279,19 @@ function renderInventoryHTML() {
           <thead class="bg-slate-50 text-amber-700 font-bold border-b border-slate-200">
             <tr>
               <th class="p-3">المنتج</th>
-              <th class="p-3">الكمية الحالية</th>
+              <th class="p-3 text-center">فرع الشعلان</th>
+              <th class="p-3 text-center">فرع أبو رمانة</th>
               <th class="p-3">الحد الأدنى</th>
               <th class="p-3">سعر البيع</th>
-              <th class="p-3 text-center">تعديل المخزون</th>
+              <th class="p-3 text-center">تعديل المخزون (${curBranch.name})</th>
             </tr>
           </thead>
           <tbody class="divide-y divide-slate-100">
             ${AppState.inventory.map(item => `
-              <tr class="hover:bg-slate-50 ${item.stock <= item.minStock ? 'bg-rose-50' : ''}">
+              <tr class="hover:bg-slate-50 ${(item.stocks[curBranch.id] || 0) <= item.minStock ? 'bg-rose-50' : ''}">
                 <td class="p-3 font-bold text-slate-800">${item.name}</td>
-                <td class="p-3 font-bold ${item.stock <= item.minStock ? 'text-rose-600' : 'text-emerald-600'}">${item.stock}</td>
+                <td class="p-3 text-center font-bold text-slate-700">${item.stocks['br-1'] || 0}</td>
+                <td class="p-3 text-center font-bold text-slate-700">${item.stocks['br-2'] || 0}</td>
                 <td class="p-3">${item.minStock}</td>
                 <td class="p-3 font-bold text-amber-600">${formatCurrency(item.sellPrice)}</td>
                 <td class="p-3 text-center flex items-center justify-center gap-1">
@@ -1195,9 +1308,10 @@ function renderInventoryHTML() {
 }
 
 function adjustStock(id, delta) {
+  const branchKey = AppState.activeBranchId;
   const item = AppState.inventory.find(i => i.id === id);
-  if (item) {
-    item.stock = Math.max(0, item.stock + delta);
+  if (item && item.stocks[branchKey] !== undefined) {
+    item.stocks[branchKey] = Math.max(0, item.stocks[branchKey] + delta);
     saveState();
     updateBadges();
     if (currentView === 'inventory') switchView('inventory');
@@ -1206,23 +1320,20 @@ function adjustStock(id, delta) {
 
 function bindInventoryEvents() {}
 
-// --- 7. EMPLOYEES & SALARIES VIEW ---
+// --- 7. EMPLOYEES & SALARIES ---
 function renderEmployeesHTML() {
-  let totalFixed = 0;
-  let totalCommissions = 0;
-
-  const employeeRows = AppState.employees.map(emp => {
+  const employees = filterByBranch(AppState.employees);
+  const employeeRows = employees.map(emp => {
+    const branchName = AppState.branches.find(b => b.id === emp.branchId)?.name || "فرع";
     const empReceipts = AppState.receipts.filter(r => r.employeeId === emp.id);
     const empSales = empReceipts.reduce((sum, r) => sum + r.total, 0);
     const commissionEarned = emp.payType !== 'salary' ? (empSales * (emp.commissionRate / 100)) : 0;
     const fixed = emp.payType !== 'commission' ? emp.fixedSalary : 0;
     const grandTotal = fixed + commissionEarned;
 
-    totalFixed += fixed;
-    totalCommissions += commissionEarned;
-
     return `
       <tr class="hover:bg-slate-50">
+        <td class="p-3 font-semibold text-slate-500">${branchName}</td>
         <td class="p-3 font-bold text-slate-800">${emp.name} <br><span class="text-[10px] text-slate-500 font-normal">${emp.phone}</span></td>
         <td class="p-3">${emp.role}</td>
         <td class="p-3"><span class="px-2 py-0.5 rounded text-[10px] font-semibold bg-purple-100 text-purple-700">${emp.payType}</span></td>
@@ -1239,14 +1350,15 @@ function renderEmployeesHTML() {
     <div class="space-y-6 animate-fade-in">
       <div class="flex items-center justify-between">
         <div>
-          <h2 class="text-2xl font-black text-slate-800">إدارة موظفي SalonLove والرواتب</h2>
-          <p class="text-xs text-slate-500">متابعة الرواتب الثابتة، نسب العمولات، والمستحقات</p>
+          <h2 class="text-2xl font-black text-slate-800">إدارة الموظفين والرواتب والعمولات</h2>
+          <p class="text-xs text-slate-500">حساب الرواتب الثابتة، نسب العمولات ومستحقات الكادر</p>
         </div>
       </div>
       <div class="glass-panel p-4 overflow-x-auto">
         <table class="w-full text-right text-xs text-slate-700">
           <thead class="bg-slate-50 text-amber-700 font-bold border-b border-slate-200">
             <tr>
+              <th class="p-3">الفرع</th>
               <th class="p-3">الموظف</th>
               <th class="p-3">المسمى</th>
               <th class="p-3">النظام</th>
@@ -1268,39 +1380,70 @@ function renderEmployeesHTML() {
 
 function bindEmployeesEvents() {}
 
-// --- 8. REPORTS VIEW & DOMContentLoaded ---
+// --- 8. REPORTS (SIDE-BY-SIDE AUDIT) ---
 function renderReportsHTML() {
-  const totalRevenue = AppState.receipts.reduce((sum, r) => sum + r.total, 0);
-  const totalExpensesBills = AppState.bills.reduce((sum, b) => sum + b.amount, 0);
-  const cashTotal = AppState.receipts.filter(r => r.paymentMethod === 'cash').reduce((s, r) => s + r.total, 0);
-  const epayTotal = AppState.receipts.filter(r => r.paymentMethod === 'epayment').reduce((s, r) => s + r.total, 0);
-  const transferTotal = AppState.receipts.filter(r => r.paymentMethod === 'transfer').reduce((s, r) => s + r.total, 0);
+  const getBranchStats = (bId) => {
+    const receipts = AppState.receipts.filter(r => r.branchId === bId);
+    const bills = AppState.bills.filter(b => b.branchId === bId);
+    const rev = receipts.reduce((s, r) => s + r.total, 0);
+    const exp = bills.reduce((s, b) => s + b.amount, 0);
+    return { rev, exp, net: rev - exp, count: receipts.length };
+  };
+
+  const shalan = getBranchStats('br-1');
+  const abuRomaneh = getBranchStats('br-2');
+  const totalRev = shalan.rev + abuRomaneh.rev;
+  const totalExp = shalan.exp + abuRomaneh.exp;
+  const totalNet = totalRev - totalExp;
 
   return `
     <div class="space-y-6 animate-fade-in">
       <div>
-        <h2 class="text-2xl font-black text-slate-800">تقارير وأرباح SalonLove</h2>
-        <p class="text-xs text-slate-500">تحليل المداخيل، المصاريف، وصافي الأرباح</p>
+        <h2 class="text-2xl font-black text-slate-800">التقارير المالية ومقارنة الفروع</h2>
+        <p class="text-xs text-slate-500">تحليل الأداء المالي، المبيعات والمصاريف لكل فرع</p>
       </div>
+
       <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
         <div class="glass-panel p-4 border-emerald-200">
-          <p class="text-xs text-slate-500">الإيرادات الكلية</p>
-          <h3 class="text-xl font-extrabold text-emerald-600 mt-1">${formatCurrency(totalRevenue)}</h3>
+          <p class="text-xs text-slate-500">إجمالي إيرادات الصالون</p>
+          <h3 class="text-xl font-extrabold text-emerald-600 mt-1">${formatCurrency(totalRev)}</h3>
         </div>
         <div class="glass-panel p-4 border-rose-200">
-          <p class="text-xs text-slate-500">إجمالي المصاريف</p>
-          <h3 class="text-xl font-extrabold text-rose-600 mt-1">${formatCurrency(totalExpensesBills)}</h3>
+          <p class="text-xs text-slate-500">إجمالي المصاريف المجمعة</p>
+          <h3 class="text-xl font-extrabold text-rose-600 mt-1">${formatCurrency(totalExp)}</h3>
         </div>
         <div class="glass-panel p-4 border-amber-200">
-          <p class="text-xs text-slate-500">صافي الأرباح</p>
-          <h3 class="text-xl font-extrabold text-amber-600 mt-1">${formatCurrency(totalRevenue - totalExpensesBills)}</h3>
+          <p class="text-xs text-slate-500">صافي أرباح الفروع معاً</p>
+          <h3 class="text-xl font-extrabold text-amber-600 mt-1">${formatCurrency(totalNet)}</h3>
         </div>
       </div>
-      <div class="glass-panel p-5 space-y-3 text-xs">
-        <h3 class="font-bold text-slate-800">توزيع طرق التحصيل</h3>
-        <div class="flex justify-between p-2.5 bg-slate-50 rounded-lg border border-slate-200"><span>نقدي (Cash):</span><b class="text-emerald-600">${formatCurrency(cashTotal)}</b></div>
-        <div class="flex justify-between p-2.5 bg-slate-50 rounded-lg border border-slate-200"><span>إلكتروني (سيريتل كاش):</span><b class="text-blue-600">${formatCurrency(epayTotal)}</b></div>
-        <div class="flex justify-between p-2.5 bg-slate-50 rounded-lg border border-slate-200"><span>تحويل بنكي:</span><b class="text-purple-600">${formatCurrency(transferTotal)}</b></div>
+
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <!-- Branch 1: Al-Shalan -->
+        <div class="glass-panel p-5 space-y-4 border-t-4 border-amber-500">
+          <div class="flex items-center justify-between border-b border-slate-100 pb-2">
+            <h3 class="font-black text-base text-slate-800">📍 فرع الشعلان</h3>
+            <span class="text-xs bg-amber-100 text-amber-800 px-2 py-0.5 rounded font-bold">${shalan.count} فواتير</span>
+          </div>
+          <div class="space-y-2 text-xs">
+            <div class="flex justify-between p-2 bg-slate-50 rounded"><span>الإيرادات:</span><b class="text-emerald-600">${formatCurrency(shalan.rev)}</b></div>
+            <div class="flex justify-between p-2 bg-slate-50 rounded"><span>المصاريف:</span><b class="text-rose-600">${formatCurrency(shalan.exp)}</b></div>
+            <div class="flex justify-between p-2.5 bg-amber-50 rounded font-bold text-sm"><span>صافي الربح:</span><b class="text-amber-700">${formatCurrency(shalan.net)}</b></div>
+          </div>
+        </div>
+
+        <!-- Branch 2: Abu Romaneh -->
+        <div class="glass-panel p-5 space-y-4 border-t-4 border-blue-500">
+          <div class="flex items-center justify-between border-b border-slate-100 pb-2">
+            <h3 class="font-black text-base text-slate-800">📍 فرع أبو رمانة</h3>
+            <span class="text-xs bg-blue-100 text-blue-800 px-2 py-0.5 rounded font-bold">${abuRomaneh.count} فواتير</span>
+          </div>
+          <div class="space-y-2 text-xs">
+            <div class="flex justify-between p-2 bg-slate-50 rounded"><span>الإيرادات:</span><b class="text-emerald-600">${formatCurrency(abuRomaneh.rev)}</b></div>
+            <div class="flex justify-between p-2 bg-slate-50 rounded"><span>المصاريف:</span><b class="text-rose-600">${formatCurrency(abuRomaneh.exp)}</b></div>
+            <div class="flex justify-between p-2.5 bg-blue-50 rounded font-bold text-sm"><span>صافي الربح:</span><b class="text-blue-700">${formatCurrency(abuRomaneh.net)}</b></div>
+          </div>
+        </div>
       </div>
     </div>
   `;

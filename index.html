@@ -23,7 +23,18 @@
           <i data-lucide="scissors" class="w-4 h-4"></i>
           <span>SalonLove POS</span>
         </div>
+        <div class="h-4 w-[1px] bg-slate-300"></div>
+        
+        <!-- Restricted Branch Switcher -->
+        <div class="flex items-center gap-1.5 cursor-pointer" id="branch-switch-wrapper">
+          <i id="branch-pin-icon" data-lucide="lock" class="w-3.5 h-3.5 text-slate-400"></i>
+          <select id="branch-selector" onchange="handleBranchChangeAttempt(this.value)" class="bg-slate-100 border border-slate-300 text-slate-500 text-xs font-bold rounded-lg px-2 py-1 focus:outline-none cursor-not-allowed" disabled>
+            <option value="br-1">📍 فرع حمص</option>
+            <option value="br-2">📍 فرع الوادي </option>
+          </select>
+        </div>
       </div>
+
       <div class="flex items-center gap-4 text-xs text-slate-600">
         <span id="system-mode-badge" class="px-2 py-0.5 rounded-full text-[10px] bg-emerald-100 text-emerald-700 border border-emerald-300">
           <i data-lucide="wifi" class="inline-block w-3 h-3 ml-1"></i> Desktop POS
@@ -35,6 +46,7 @@
         </button>
       </div>
     </header>
+
     <div class="flex-1 flex overflow-hidden">
       <aside class="w-60 bg-white border-l border-slate-200 flex flex-col justify-between p-3 select-none">
         <div class="space-y-4">
@@ -44,7 +56,7 @@
             </div>
             <div>
               <h1 class="font-bold text-sm text-slate-900">SalonLove</h1>
-              <p class="text-[10px] text-amber-700 font-medium">نظام الإدارة والفواتير</p>
+              <p class="text-[10px] text-amber-700 font-medium" id="current-branch-label">فرع الشعلان</p>
             </div>
           </div>
           <nav class="space-y-1" id="main-nav">
