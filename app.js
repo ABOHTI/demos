@@ -1,11 +1,11 @@
-/* SalonLove - Multi-Branch (حمص & الوادي) + Multi-Currency (SYP / USD) + رعبون */
+/* SalonLove - Dynamic Currency Selection per Action (POS, Deposit, Bills) */
 
 const DEFAULT_STATE = {
   isAdminLocked: true,
   adminPin: "1234",
   cashierName: "كاشير SalonLove",
   activeBranchId: "br-1",
-  currency: "SYP", // "SYP" or "USD"
+  globalCurrency: "SYP", // "SYP" or "USD"
   exchangeRateUSD: 15000, // 1 USD = 15,000 SYP
   branches: [
     { id: "br-1", name: "فرع حمص", address: "حمص - شارع الدبلان / مقابل مجمع تشرين", phone: "031-224455" },
@@ -35,8 +35,8 @@ const DEFAULT_STATE = {
     { id: "emp-4", branchId: "br-2", name: "ميساء حمصي", role: "استقبال وكاشير", phone: "0988112244", payType: "salary", fixedSalary: 750000, commissionRate: 0 }
   ],
   appointments: [
-    { id: "apt-101", branchId: "br-1", customerName: "سارة الزين", phone: "0991234567", date: getTodayDateString(), time: "14:00", serviceId: "srv-3", serviceName: "صبغة شعر كاملة + خصل", employeeId: "emp-1", employeeName: "ريم الأحمد", price: 250000, deposit: 50000, status: "confirmed" },
-    { id: "apt-102", branchId: "br-2", customerName: "هدى دروبي", phone: "0933445566", date: getTodayDateString(), time: "16:30", serviceId: "srv-5", serviceName: "تنظيف بشرة هيدرافيسيال", employeeId: "emp-3", employeeName: "سامر الحلبي", price: 180000, deposit: 0, status: "pending" }
+    { id: "apt-101", branchId: "br-1", customerName: "سارة الزين", phone: "0991234567", date: getTodayDateString(), time: "14:00", serviceId: "srv-3", serviceName: "صبغة شعر كاملة + خصل", employeeId: "emp-1", employeeName: "ريم الأحمد", price: 250000, deposit: 50000, depositCurrency: "SYP", status: "confirmed" },
+    { id: "apt-102", branchId: "br-2", customerName: "هدى دروبي", phone: "0933445566", date: getTodayDateString(), time: "16:30", serviceId: "srv-5", serviceName: "تنظيف بشرة هيدرافيسيال", employeeId: "emp-3", employeeName: "سامر الحلبي", price: 180000, deposit: 0, depositCurrency: "SYP", status: "pending" }
   ],
   receipts: [
     {
@@ -53,28 +53,14 @@ const DEFAULT_STATE = {
       subtotal: 210000,
       discount: 10000,
       total: 200000,
+      paidCurrency: "SYP",
       paymentMethod: "cash"
-    },
-    {
-      id: "INV-9002",
-      branchId: "br-2",
-      date: getTodayDateString() + " 12:45",
-      customerName: "عمر السوري",
-      employeeId: "emp-3",
-      employeeName: "سامر الحلبي",
-      items: [
-        { name: "قص شعر وحلاقة ذقن (رجالي)", qty: 1, price: 45000 }
-      ],
-      subtotal: 45000,
-      discount: 0,
-      total: 45000,
-      paymentMethod: "epayment"
     }
   ],
   bills: [
-    { id: "bill-1", branchId: "br-1", title: "فاتورة كهرباء فرع حمص", category: "كهرباء", amount: 350000, date: getTodayDateString(), status: "مدفوعة" },
-    { id: "bill-2", branchId: "br-1", title: "شراء مازوت مولدة حمص (200L)", category: "مازوت/محروقات", amount: 1200000, date: getTodayDateString(), status: "مدفوعة" },
-    { id: "bill-3", branchId: "br-2", title: "إيجار صالون فرع الوادي الشهري", category: "إيجار", amount: 2500000, date: getTodayDateString(), status: "غير مدفوعة" }
+    { id: "bill-1", branchId: "br-1", title: "فاتورة كهرباء فرع حمص", category: "كهرباء", amount: 350000, currency: "SYP", date: getTodayDateString(), status: "مدفوعة" },
+    { id: "bill-2", branchId: "br-1", title: "شراء مازوت مولدة حمص (200L)", category: "مازوت/محروقات", amount: 1200000, currency: "SYP", date: getTodayDateString(), status: "مدفوعة" },
+    { id: "bill-3", branchId: "br-2", title: "إيجار صالون فرع الوادي الشهري", category: "إيجار", amount: 2500000, currency: "SYP", date: getTodayDateString(), status: "غير مدفوعة" }
   ]
 };
 
@@ -82,6 +68,7 @@ let AppState = loadState();
 let posCart = [];
 let currentPosTab = "services";
 let selectedPaymentMethod = "cash";
+let posPaymentCurrency = "SYP"; // Active checkout currency selection
 let currentView = "dashboard";
 
 function getTodayDateString() {
@@ -91,7 +78,7 @@ function getTodayDateString() {
 
 function loadState() {
   try {
-    const saved = localStorage.getItem('salonlove_multibranch_state_v4');
+    const saved = localStorage.getItem('salonlove_multibranch_state_v5');
     if (saved) return JSON.parse(saved);
   } catch (e) {
     console.error("Error loading state", e);
@@ -101,36 +88,38 @@ function loadState() {
 
 function saveState() {
   try {
-    localStorage.setItem('salonlove_multibranch_state_v4', JSON.stringify(AppState));
+    localStorage.setItem('salonlove_multibranch_state_v5', JSON.stringify(AppState));
   } catch (e) {
     console.error("Error saving state", e);
   }
 }
 
-// Currency Conversion & Display
-function formatCurrency(amountInSYP) {
+// Convert/Format currencies
+function formatCurrency(amountInSYP, targetCurrency = null) {
   const sypVal = Number(amountInSYP || 0);
-  if (AppState.currency === "USD") {
+  const curr = targetCurrency || AppState.globalCurrency;
+  if (curr === "USD") {
     const usdVal = sypVal / (AppState.exchangeRateUSD || 15000);
     return "$" + usdVal.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
   }
   return sypVal.toLocaleString('en-US') + " SYP";
 }
 
-function changeCurrency(curr) {
-  AppState.currency = curr;
+function changeGlobalCurrency(curr) {
+  AppState.globalCurrency = curr;
+  posPaymentCurrency = curr;
   saveState();
-  updateCurrencyUI();
+  updateGlobalCurrencyUI();
   updateBadges();
   switchView(currentView);
 }
 
-function updateCurrencyUI() {
+function updateGlobalCurrencyUI() {
   const btnSYP = document.getElementById('curr-btn-syp');
   const btnUSD = document.getElementById('curr-btn-usd');
   const sideLabel = document.getElementById('sidebar-curr-label');
 
-  if (AppState.currency === 'USD') {
+  if (AppState.globalCurrency === 'USD') {
     if (btnUSD) btnUSD.className = "px-2 py-0.5 rounded text-[11px] font-bold transition bg-amber-500 text-white shadow-sm";
     if (btnSYP) btnSYP.className = "px-2 py-0.5 rounded text-[11px] font-bold text-slate-600 hover:text-amber-600 transition";
     if (sideLabel) sideLabel.textContent = "$ (USD)";
@@ -149,21 +138,22 @@ function filterByBranch(list) {
   return list.filter(item => item.branchId === AppState.activeBranchId);
 }
 
-// Drawer Controller
-function toggleMobileSidebar(forceState = null) {
+// Mobile Sidebar Drawer Controller
+function toggleMobileSidebar(shouldOpen) {
   const sidebar = document.getElementById('app-sidebar');
   const backdrop = document.getElementById('mobile-sidebar-backdrop');
   if (!sidebar || !backdrop) return;
 
-  const isOpen = sidebar.classList.contains('sidebar-open');
-  const shouldOpen = forceState !== null ? forceState : !isOpen;
+  const openState = shouldOpen !== undefined ? shouldOpen : !sidebar.classList.contains('drawer-open');
 
-  if (shouldOpen) {
-    sidebar.classList.add('sidebar-open');
+  if (openState) {
+    sidebar.classList.add('drawer-open');
     backdrop.classList.remove('hidden');
+    document.body.style.overflow = 'hidden';
   } else {
-    sidebar.classList.remove('sidebar-open');
+    sidebar.classList.remove('drawer-open');
     backdrop.classList.add('hidden');
+    document.body.style.overflow = '';
   }
 }
 
@@ -192,10 +182,10 @@ function updateBranchHeaderUI() {
     sel.value = AppState.activeBranchId;
     if (AppState.isAdminLocked) {
       sel.disabled = true;
-      sel.className = "bg-slate-100 border border-slate-300 text-slate-500 text-[11px] md:text-xs font-bold rounded-lg px-1.5 md:px-2 py-1 focus:outline-none cursor-not-allowed opacity-80 max-w-[125px] md:max-w-none truncate";
+      sel.className = "bg-slate-100 border border-slate-300 text-slate-500 text-[11px] md:text-xs font-bold rounded-lg px-1.5 md:px-2 py-1 focus:outline-none cursor-not-allowed opacity-80 max-w-[105px] sm:max-w-none truncate";
     } else {
       sel.disabled = false;
-      sel.className = "bg-amber-50 border border-amber-300 text-amber-900 text-[11px] md:text-xs font-bold rounded-lg px-1.5 md:px-2 py-1 focus:outline-none cursor-pointer max-w-[125px] md:max-w-none truncate";
+      sel.className = "bg-amber-50 border border-amber-300 text-amber-900 text-[11px] md:text-xs font-bold rounded-lg px-1.5 md:px-2 py-1 focus:outline-none cursor-pointer max-w-[105px] sm:max-w-none truncate";
     }
   }
 
@@ -221,7 +211,7 @@ function initApp() {
   setupAdminLock();
   setupBackupButton();
   updateBranchHeaderUI();
-  updateCurrencyUI();
+  updateGlobalCurrencyUI();
   updateBadges();
   switchView('dashboard');
 }
@@ -507,7 +497,7 @@ function renderDashboardHTML() {
                 <div>
                   <h4 class="font-bold text-slate-800">${apt.customerName} (${apt.phone})</h4>
                   <p class="text-[11px] text-slate-500">${apt.serviceName} - المسؤول: <span class="text-amber-600 font-semibold">${apt.employeeName}</span> (${apt.time})</p>
-                  ${apt.deposit > 0 ? `<p class="text-[10px] text-emerald-600 font-bold mt-0.5">رعبون مدفوع: ${formatCurrency(apt.deposit)} | المتبقي: ${formatCurrency(apt.price - apt.deposit)}</p>` : ''}
+                  ${apt.deposit > 0 ? `<p class="text-[10px] text-emerald-600 font-bold mt-0.5">رعبون مدفوع: ${formatCurrency(apt.deposit, apt.depositCurrency)} | المتبقي: ${formatCurrency(apt.price - apt.deposit, apt.depositCurrency)}</p>` : ''}
                 </div>
                 <button onclick="convertApptToPOS('${apt.id}')" class="px-3 py-1.5 bg-amber-500 hover:bg-amber-600 text-white font-bold rounded text-[11px] shadow-sm self-end sm:self-auto">تحويل لـ POS</button>
               </div>
@@ -518,7 +508,21 @@ function renderDashboardHTML() {
   `;
 }
 
-// --- 2. POS VIEW ---
+// --- 2. POS VIEW WITH IN-CHECKOUT CURRENCY SELECTION ---
+function setPOSCheckoutCurrency(curr) {
+  posPaymentCurrency = curr;
+  updatePOSTotals();
+  const btnSYP = document.getElementById('pos-curr-syp');
+  const btnUSD = document.getElementById('pos-curr-usd');
+  if (curr === 'USD') {
+    if (btnUSD) btnUSD.className = "py-1.5 rounded-lg border text-center font-bold border-amber-500 bg-amber-50 text-amber-700 shadow-sm";
+    if (btnSYP) btnSYP.className = "py-1.5 rounded-lg border text-center font-bold border-slate-200 bg-slate-50 text-slate-600";
+  } else {
+    if (btnSYP) btnSYP.className = "py-1.5 rounded-lg border text-center font-bold border-amber-500 bg-amber-50 text-amber-700 shadow-sm";
+    if (btnUSD) btnUSD.className = "py-1.5 rounded-lg border text-center font-bold border-slate-200 bg-slate-50 text-slate-600";
+  }
+}
+
 function renderPOSHTML() {
   const curBranch = getActiveBranch();
   const branchEmployees = AppState.employees.filter(e => e.branchId === curBranch.id);
@@ -529,7 +533,7 @@ function renderPOSHTML() {
       <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
         <div>
           <h2 class="text-xl md:text-2xl font-black text-slate-800">نقطة البيع الكاشير (POS)</h2>
-          <p class="text-xs text-slate-500">إصدار فواتير وسداد لـ <span class="font-bold text-amber-700">${curBranch.name}</span> (${AppState.currency})</p>
+          <p class="text-xs text-slate-500">إصدار فواتير وسداد لـ <span class="font-bold text-amber-700">${curBranch.name}</span></p>
         </div>
         <div class="flex items-center gap-2 self-start sm:self-auto">
           <span class="text-xs text-slate-500">الكاشير:</span>
@@ -576,15 +580,24 @@ function renderPOSHTML() {
                 </div>
               </div>
 
-              <div class="min-h-[140px] max-h-[200px] overflow-y-auto space-y-2" id="pos-cart-items-container">
+              <div class="min-h-[130px] max-h-[190px] overflow-y-auto space-y-2" id="pos-cart-items-container">
                 ${renderPOSCartItems()}
               </div>
             </div>
 
             <div class="border-t border-slate-200 pt-3 space-y-3">
+              <!-- Checkpoint 1: POS Currency Selector -->
+              <div>
+                <label class="block text-[11px] text-slate-600 mb-1 font-semibold">عملة محاسبة الزبون:</label>
+                <div class="grid grid-cols-2 gap-2 text-xs">
+                  <button type="button" onclick="setPOSCheckoutCurrency('SYP')" id="pos-curr-syp" class="py-1.5 rounded-lg border text-center font-bold ${posPaymentCurrency === 'SYP' ? 'border-amber-500 bg-amber-50 text-amber-700 shadow-sm' : 'border-slate-200 bg-slate-50 text-slate-600'}">ليرة سورية (SYP)</button>
+                  <button type="button" onclick="setPOSCheckoutCurrency('USD')" id="pos-curr-usd" class="py-1.5 rounded-lg border text-center font-bold ${posPaymentCurrency === 'USD' ? 'border-amber-500 bg-amber-50 text-amber-700 shadow-sm' : 'border-slate-200 bg-slate-50 text-slate-600'}">دولار أمريكي (USD $)</button>
+                </div>
+              </div>
+
               <div class="flex items-center justify-between text-xs">
-                <span class="text-slate-600">خصم / رعبون مسبق (${AppState.currency}):</span>
-                <input type="number" id="pos-discount-input" oninput="updatePOSTotals()" value="0" min="0" class="w-32 bg-slate-50 border border-slate-300 rounded p-1 text-center font-bold text-amber-600">
+                <span class="text-slate-600">خصم / رعبون مسبق (<span id="pos-disc-curr-label">${posPaymentCurrency}</span>):</span>
+                <input type="number" id="pos-discount-input" oninput="updatePOSTotals()" value="0" min="0" step="any" class="w-32 bg-slate-50 border border-slate-300 rounded p-1 text-center font-bold text-amber-600">
               </div>
 
               <div>
@@ -597,9 +610,9 @@ function renderPOSHTML() {
               </div>
 
               <div class="bg-slate-50 p-3 rounded-xl space-y-1 text-xs border border-slate-200">
-                <div class="flex justify-between text-slate-600"><span>المجموع:</span><span id="pos-subtotal-val">${formatCurrency(calculatePosSubtotal())}</span></div>
+                <div class="flex justify-between text-slate-600"><span>المجموع:</span><span id="pos-subtotal-val">${formatCurrency(calculatePosSubtotal(), posPaymentCurrency)}</span></div>
                 <div class="flex justify-between text-base font-black text-amber-600 pt-1 border-t border-slate-200">
-                  <span>المبلغ النهائي للمطالبة:</span><span id="pos-total-val">${formatCurrency(calculatePosTotal())}</span>
+                  <span>المبلغ النهائي المطلوب:</span><span id="pos-total-val">${formatCurrency(calculatePosTotal(), posPaymentCurrency)}</span>
                 </div>
               </div>
 
@@ -635,7 +648,7 @@ function renderPOSCatalogItems(filterText = "") {
           <h4 class="font-bold text-xs text-slate-800 line-clamp-2 mt-0.5">${item.name}</h4>
         </div>
         <div class="flex items-center justify-between pt-2 border-t border-slate-100">
-          <span class="font-bold text-amber-600 text-xs">${formatCurrency(price)}</span>
+          <span class="font-bold text-amber-600 text-xs">${formatCurrency(price, posPaymentCurrency)}</span>
           <span class="w-6 h-6 rounded-lg bg-amber-100 text-amber-700 flex items-center justify-center text-xs font-bold">+</span>
         </div>
       </div>
@@ -692,7 +705,7 @@ function renderPOSCartItems() {
     <div class="flex items-center justify-between p-2 bg-slate-50 rounded-lg border border-slate-200 text-xs">
       <div>
         <h5 class="font-bold text-slate-800">${item.name}</h5>
-        <span class="text-[10px] text-amber-600">${formatCurrency(item.price)} × ${item.qty}</span>
+        <span class="text-[10px] text-amber-600">${formatCurrency(item.price, posPaymentCurrency)} × ${item.qty}</span>
       </div>
       <div class="flex items-center gap-2">
         <button onclick="updateCartQty(${idx}, 1)" class="w-6 h-6 bg-white border border-slate-300 text-slate-700 rounded font-bold">+</button>
@@ -723,8 +736,8 @@ function calculatePosSubtotal() {
 function calculatePosTotal() {
   const sub = calculatePosSubtotal();
   let disc = Number(document.getElementById('pos-discount-input')?.value || 0);
-  if (AppState.currency === 'USD') {
-    disc = disc * (AppState.exchangeRateUSD || 15000); // convert entered USD discount back to SYP base
+  if (posPaymentCurrency === 'USD') {
+    disc = disc * (AppState.exchangeRateUSD || 15000);
   }
   return Math.max(0, sub - disc);
 }
@@ -734,8 +747,10 @@ function updatePOSTotals() {
   const tot = calculatePosTotal();
   const subEl = document.getElementById('pos-subtotal-val');
   const totEl = document.getElementById('pos-total-val');
-  if (subEl) subEl.textContent = formatCurrency(sub);
-  if (totEl) totEl.textContent = formatCurrency(tot);
+  const discLbl = document.getElementById('pos-disc-curr-label');
+  if (discLbl) discLbl.textContent = posPaymentCurrency;
+  if (subEl) subEl.textContent = formatCurrency(sub, posPaymentCurrency);
+  if (totEl) totEl.textContent = formatCurrency(tot, posPaymentCurrency);
 }
 
 function setPaymentMethod(method) {
@@ -767,7 +782,7 @@ function checkoutPOS(shouldPrint) {
 
   const subtotal = calculatePosSubtotal();
   let discount = Number(document.getElementById('pos-discount-input')?.value || 0);
-  if (AppState.currency === 'USD') {
+  if (posPaymentCurrency === 'USD') {
     discount = discount * (AppState.exchangeRateUSD || 15000);
   }
   const total = calculatePosTotal();
@@ -787,6 +802,7 @@ function checkoutPOS(shouldPrint) {
     subtotal,
     discount,
     total,
+    paidCurrency: posPaymentCurrency,
     paymentMethod: selectedPaymentMethod
   };
 
@@ -817,6 +833,8 @@ function checkoutPOS(shouldPrint) {
 function openReceiptModal(receipt) {
   const branchObj = AppState.branches.find(b => b.id === receipt.branchId) || AppState.branches[0];
   const holder = document.getElementById('modals-placeholder');
+  const currencyUsed = receipt.paidCurrency || "SYP";
+
   holder.innerHTML = `
     <div id="modal-receipt-view" class="fixed inset-0 modal-overlay flex items-center justify-center p-3 z-50">
       <div class="glass-panel w-full max-w-sm max-h-[90vh] overflow-y-auto p-4 sm:p-6 rounded-2xl border border-slate-300 space-y-4 animate-fade-in shadow-2xl">
@@ -837,6 +855,7 @@ function openReceiptModal(receipt) {
             <div class="flex justify-between"><span>التاريخ:</span><span>${receipt.date}</span></div>
             <div class="flex justify-between"><span>الزبون:</span><span>${receipt.customerName}</span></div>
             <div class="flex justify-between"><span>المسؤول:</span><span>${receipt.employeeName}</span></div>
+            <div class="flex justify-between"><span>عملة السداد:</span><span class="font-bold text-amber-700">${currencyUsed === 'USD' ? 'دولار أمريكي (USD)' : 'ليرة سورية (SYP)'}</span></div>
             <div class="flex justify-between"><span>طريقة الدفع:</span><span class="font-bold">${receipt.paymentMethod === 'cash' ? 'نقدي (Cash)' : receipt.paymentMethod === 'epayment' ? 'سيريتل كاش' : 'تحويل بنكي'}</span></div>
           </div>
           <table class="w-full border-t border-b border-dashed border-slate-400 py-1 text-right text-[11px]">
@@ -846,13 +865,13 @@ function openReceiptModal(receipt) {
               </tr>
             </thead>
             <tbody>
-              ${receipt.items.map(i => `<tr><td>${i.name}</td><td class="text-center">${i.qty}</td><td class="text-left">${formatCurrency(i.price * i.qty)}</td></tr>`).join('')}
+              ${receipt.items.map(i => `<tr><td>${i.name}</td><td class="text-center">${i.qty}</td><td class="text-left">${formatCurrency(i.price * i.qty, currencyUsed)}</td></tr>`).join('')}
             </tbody>
           </table>
           <div class="space-y-0.5 text-[11px]">
-            <div class="flex justify-between text-slate-600"><span>المجموع:</span><span>${formatCurrency(receipt.subtotal)}</span></div>
-            <div class="flex justify-between text-slate-600"><span>الخصم / الرعبون:</span><span>${formatCurrency(receipt.discount)}</span></div>
-            <div class="flex justify-between font-bold text-sm text-slate-900 pt-1 border-t border-slate-300"><span>الصافي المدفوع:</span><span>${formatCurrency(receipt.total)}</span></div>
+            <div class="flex justify-between text-slate-600"><span>المجموع:</span><span>${formatCurrency(receipt.subtotal, currencyUsed)}</span></div>
+            <div class="flex justify-between text-slate-600"><span>الخصم / الرعبون:</span><span>${formatCurrency(receipt.discount, currencyUsed)}</span></div>
+            <div class="flex justify-between font-bold text-sm text-slate-900 pt-1 border-t border-slate-300"><span>الصافي المدفوع:</span><span>${formatCurrency(receipt.total, currencyUsed)}</span></div>
           </div>
           <div class="text-center text-[10px] text-slate-500 pt-1">
             <p>Thank you for visiting SalonLove!</p>
@@ -893,6 +912,9 @@ function convertApptToPOS(apptId) {
     updateBranchHeaderUI();
   }
 
+  // Set the POS payment currency to the deposit currency by default
+  posPaymentCurrency = apt.depositCurrency || AppState.globalCurrency;
+
   switchView('pos');
   setTimeout(() => {
     const custInput = document.getElementById('pos-customer-name');
@@ -902,19 +924,20 @@ function convertApptToPOS(apptId) {
     
     const discInput = document.getElementById('pos-discount-input');
     if (discInput && apt.deposit) {
-      if (AppState.currency === 'USD') {
+      if (posPaymentCurrency === 'USD') {
         discInput.value = (apt.deposit / (AppState.exchangeRateUSD || 15000)).toFixed(2);
       } else {
         discInput.value = apt.deposit;
       }
     }
+    setPOSCheckoutCurrency(posPaymentCurrency);
     refreshCartUI();
   }, 50);
 }
 
 function bindPOSEvents() {}
 
-// --- 3. APPOINTMENTS ---
+// --- 3. APPOINTMENTS WITH CURRENCY SELECTION ---
 function renderAppointmentsHTML() {
   const today = getTodayDateString();
   const curBranch = getActiveBranch();
@@ -923,7 +946,7 @@ function renderAppointmentsHTML() {
       <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div>
           <h2 class="text-xl md:text-2xl font-black text-slate-800">نظام الحجوزات والمواعيد</h2>
-          <p class="text-xs text-slate-500">حجوزات <span class="font-bold text-amber-700">${curBranch.name}</span> (${AppState.currency})</p>
+          <p class="text-xs text-slate-500">حجوزات <span class="font-bold text-amber-700">${curBranch.name}</span></p>
         </div>
         <div class="flex items-center gap-2 sm:gap-3">
           <input type="date" id="appt-date-filter" value="${today}" onchange="filterAppointments()" class="bg-white border border-slate-300 rounded-xl px-2 sm:px-3 py-1.5 sm:py-2 text-xs text-slate-700 flex-1 sm:flex-none">
@@ -964,6 +987,7 @@ function renderAppointmentsRows(dateFilter = "") {
   }
   return list.map(apt => {
     const depositVal = Number(apt.deposit || 0);
+    const depCurr = apt.depositCurrency || "SYP";
     const remainingVal = Math.max(0, apt.price - depositVal);
     return `
       <tr class="hover:bg-slate-50">
@@ -974,7 +998,7 @@ function renderAppointmentsRows(dateFilter = "") {
         <td class="p-2 sm:p-3 font-bold text-slate-800">${formatCurrency(apt.price)}</td>
         <td class="p-2 sm:p-3">
           ${depositVal > 0 
-            ? `<span class="font-bold text-emerald-600">${formatCurrency(depositVal)}</span><br><span class="text-[10px] text-rose-500 font-semibold">باقي: ${formatCurrency(remainingVal)}</span>` 
+            ? `<span class="font-bold text-emerald-600">${formatCurrency(depositVal, depCurr)}</span> <span class="text-[10px] font-semibold text-slate-500">(${depCurr})</span><br><span class="text-[10px] text-rose-500 font-semibold">باقي: ${formatCurrency(remainingVal, depCurr)}</span>` 
             : `<span class="text-slate-400">بدون رعبون</span>`}
         </td>
         <td class="p-2 sm:p-3"><span class="px-2 py-0.5 rounded text-[10px] font-semibold badge-${apt.status}">${apt.status}</span></td>
@@ -997,6 +1021,7 @@ function filterAppointments() {
   }
 }
 
+// Checkpoint 2: Appointment Modal with Currency Selection
 function openNewAppointmentModal() {
   const curBranch = getActiveBranch();
   const servicesOpt = AppState.services.map(s => `<option value="${s.id}" data-price="${s.price}">${s.name} (${formatCurrency(s.price)})</option>`).join('');
@@ -1042,10 +1067,23 @@ function openNewAppointmentModal() {
               ${empOpt}
             </select>
           </div>
-          <div>
-            <label class="block text-slate-600 mb-1">قيمة الرعبون (${AppState.currency}) - اتركه 0 إن لم يدفع</label>
-            <input type="number" id="appt-deposit-input" min="0" value="0" step="any" placeholder="0" class="w-full bg-slate-50 border border-amber-300 rounded-lg p-2 font-bold text-amber-700">
+          
+          <!-- Deposit Amount & Currency Selector -->
+          <div class="p-3 bg-amber-50/70 rounded-xl border border-amber-200/80 space-y-2">
+            <label class="block text-slate-700 font-bold">تسجيل الرعبون (الدفعة المسبقة):</label>
+            <div class="grid grid-cols-12 gap-2">
+              <div class="col-span-7">
+                <input type="number" id="appt-deposit-input" min="0" value="0" step="any" placeholder="0" class="w-full bg-white border border-amber-300 rounded-lg p-2 font-bold text-amber-700">
+              </div>
+              <div class="col-span-5">
+                <select id="appt-deposit-currency" class="w-full bg-white border border-amber-300 rounded-lg p-2 font-bold text-amber-800">
+                  <option value="SYP" ${AppState.globalCurrency === 'SYP' ? 'selected' : ''}>ل.س (SYP)</option>
+                  <option value="USD" ${AppState.globalCurrency === 'USD' ? 'selected' : ''}>$ (USD)</option>
+                </select>
+              </div>
+            </div>
           </div>
+
           <div class="pt-2 flex gap-2">
             <button type="button" onclick="closeModalDirect('modal-appointment')" class="w-1/2 bg-slate-100 text-slate-700 py-2.5 rounded-xl font-semibold">إلغاء</button>
             <button type="submit" class="w-1/2 gold-gradient-btn py-2.5 rounded-xl font-bold">تأكيد الحجز</button>
@@ -1073,9 +1111,13 @@ function saveNewAppointment(e) {
   const employeeId = empSelect.value;
   const employeeName = empSelect.options[empSelect.selectedIndex].text.split(' (')[0];
   
+  const depCurr = document.getElementById('appt-deposit-currency').value;
   let depositInput = Number(document.getElementById('appt-deposit-input')?.value || 0);
-  if (AppState.currency === 'USD') {
-    depositInput = depositInput * (AppState.exchangeRateUSD || 15000);
+  
+  // Store deposit normalized to base SYP
+  let depositBaseSYP = depositInput;
+  if (depCurr === 'USD') {
+    depositBaseSYP = depositInput * (AppState.exchangeRateUSD || 15000);
   }
 
   AppState.appointments.push({
@@ -1090,7 +1132,8 @@ function saveNewAppointment(e) {
     employeeId,
     employeeName,
     price: servicePrice,
-    deposit: depositInput,
+    deposit: depositBaseSYP,
+    depositCurrency: depCurr,
     status: 'confirmed'
   });
 
@@ -1127,7 +1170,7 @@ function renderReceiptsHTML() {
       <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div>
           <h2 class="text-xl md:text-2xl font-black text-slate-800">سجل الإيصالات والمعاملات</h2>
-          <p class="text-xs text-slate-500">أرشيف الفواتير الصادرة وطرق السداد (${AppState.currency})</p>
+          <p class="text-xs text-slate-500">أرشيف الفواتير الصادرة وطرق السداد</p>
         </div>
         <div class="flex items-center gap-2 sm:gap-3">
           <select id="receipt-filter-payment" onchange="filterReceiptsTable()" class="bg-white border border-slate-300 rounded-xl px-2 sm:px-3 py-1.5 sm:py-2 text-xs text-slate-700">
@@ -1147,8 +1190,8 @@ function renderReceiptsHTML() {
               <th class="p-2 sm:p-3">رقم الفاتورة</th>
               <th class="p-2 sm:p-3">التاريخ والوقت</th>
               <th class="p-2 sm:p-3">الزبون</th>
+              <th class="p-2 sm:p-3">العملة المسددة</th>
               <th class="p-2 sm:p-3">طريقة الدفع</th>
-              <th class="p-2 sm:p-3">الموظف</th>
               <th class="p-2 sm:p-3">المبلغ</th>
               <th class="p-2 sm:p-3 text-center">طباعة</th>
             </tr>
@@ -1176,9 +1219,9 @@ function renderReceiptsRows(methodFilter = "all", searchQ = "") {
       <td class="p-2 sm:p-3 font-bold text-amber-600">${r.id}</td>
       <td class="p-2 sm:p-3">${r.date}</td>
       <td class="p-2 sm:p-3 font-semibold text-slate-800">${r.customerName}</td>
+      <td class="p-2 sm:p-3 font-bold text-amber-700">${r.paidCurrency || 'SYP'}</td>
       <td class="p-2 sm:p-3">${r.paymentMethod}</td>
-      <td class="p-2 sm:p-3">${r.employeeName}</td>
-      <td class="p-2 sm:p-3 font-black text-emerald-600">${formatCurrency(r.total)}</td>
+      <td class="p-2 sm:p-3 font-black text-emerald-600">${formatCurrency(r.total, r.paidCurrency)}</td>
       <td class="p-2 sm:p-3 text-center">
         <button onclick="viewReceiptModal('${r.id}')" class="p-1.5 bg-slate-100 border border-slate-200 text-slate-700 rounded"><i data-lucide="printer" class="w-3.5 h-3.5"></i></button>
       </td>
@@ -1198,7 +1241,7 @@ function filterReceiptsTable() {
 
 function bindReceiptsEvents() {}
 
-// --- 5. BILLS & EXPENSES ---
+// --- 5. BILLS & EXPENSES WITH CURRENCY SELECTION ---
 function renderBillsHTML() {
   const bills = filterByBranch(AppState.bills);
   const totalBills = bills.reduce((sum, b) => sum + b.amount, 0);
@@ -1209,7 +1252,7 @@ function renderBillsHTML() {
       <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div>
           <h2 class="text-xl md:text-2xl font-black text-slate-800">المصاريف التشغيلية</h2>
-          <p class="text-xs text-slate-500">فواتير الكهرباء والمحروقات والإيجارات (${AppState.currency})</p>
+          <p class="text-xs text-slate-500">فواتير الكهرباء والمحروقات والإيجارات</p>
         </div>
         <button onclick="openNewBillModal()" class="gold-gradient-btn px-4 py-2 rounded-xl text-xs flex items-center justify-center gap-2">
           <i data-lucide="plus" class="w-4 h-4"></i><span>تسجيل مصروف جديد</span>
@@ -1246,7 +1289,7 @@ function renderBillsHTML() {
             <tr>
               <th class="p-2 sm:p-3">عنوان الفاتورة</th>
               <th class="p-2 sm:p-3">الفئة</th>
-              <th class="p-2 sm:p-3">المبلغ (${AppState.currency})</th>
+              <th class="p-2 sm:p-3">المبلغ المسجل</th>
               <th class="p-2 sm:p-3">التاريخ</th>
               <th class="p-2 sm:p-3">الحالة</th>
               <th class="p-2 sm:p-3 text-center">إجراءات</th>
@@ -1257,7 +1300,7 @@ function renderBillsHTML() {
               <tr class="hover:bg-slate-50">
                 <td class="p-2 sm:p-3 font-bold text-slate-800">${b.title}</td>
                 <td class="p-2 sm:p-3">${b.category}</td>
-                <td class="p-2 sm:p-3 font-bold text-rose-600">${formatCurrency(b.amount)}</td>
+                <td class="p-2 sm:p-3 font-bold text-rose-600">${formatCurrency(b.amount, b.currency)} <span class="text-[10px] text-slate-400">(${b.currency || 'SYP'})</span></td>
                 <td class="p-2 sm:p-3">${b.date}</td>
                 <td class="p-2 sm:p-3"><span class="px-2 py-0.5 rounded text-[10px] font-semibold ${b.status === 'مدفوعة' ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'}">${b.status}</span></td>
                 <td class="p-2 sm:p-3 text-center flex items-center justify-center gap-1">
@@ -1273,6 +1316,7 @@ function renderBillsHTML() {
   `;
 }
 
+// Checkpoint 3: Bill Recording Modal with Currency Selection
 function openNewBillModal() {
   const holder = document.getElementById('modals-placeholder');
   holder.innerHTML = `
@@ -1287,19 +1331,26 @@ function openNewBillModal() {
             <label class="block text-slate-600 mb-1">اسم الفاتورة *</label>
             <input type="text" id="bill-title" required placeholder="مثال: فاتورة كهرباء" class="w-full bg-slate-50 border border-slate-300 rounded-lg p-2 text-slate-800">
           </div>
-          <div class="grid grid-cols-2 gap-2">
-            <div>
-              <label class="block text-slate-600 mb-1">الفئة *</label>
-              <select id="bill-category" required class="w-full bg-slate-50 border border-slate-300 rounded-lg p-2 text-slate-800">
-                <option value="كهرباء">كهرباء</option>
-                <option value="مازوت/محروقات">مازوت ومحروقات</option>
-                <option value="إيجار">إيجار</option>
-                <option value="أخرى">أخرى</option>
-              </select>
+          <div>
+            <label class="block text-slate-600 mb-1">الفئة *</label>
+            <select id="bill-category" required class="w-full bg-slate-50 border border-slate-300 rounded-lg p-2 text-slate-800">
+              <option value="كهرباء">كهرباء</option>
+              <option value="مازوت/محروقات">مازوت ومحروقات</option>
+              <option value="إيجار">إيجار</option>
+              <option value="أخرى">أخرى</option>
+            </select>
+          </div>
+          <div class="grid grid-cols-12 gap-2">
+            <div class="col-span-7">
+              <label class="block text-slate-600 mb-1">المبلغ *</label>
+              <input type="number" id="bill-amount" min="1" step="any" required placeholder="0" class="w-full bg-slate-50 border border-slate-300 rounded-lg p-2 text-slate-800 font-bold">
             </div>
-            <div>
-              <label class="block text-slate-600 mb-1">المبلغ (${AppState.currency}) *</label>
-              <input type="number" id="bill-amount" min="1" step="any" required placeholder="0" class="w-full bg-slate-50 border border-slate-300 rounded-lg p-2 text-slate-800">
+            <div class="col-span-5">
+              <label class="block text-slate-600 mb-1">العملة *</label>
+              <select id="bill-currency" class="w-full bg-slate-50 border border-slate-300 rounded-lg p-2 font-bold text-amber-800">
+                <option value="SYP" ${AppState.globalCurrency === 'SYP' ? 'selected' : ''}>ل.س (SYP)</option>
+                <option value="USD" ${AppState.globalCurrency === 'USD' ? 'selected' : ''}>$ (USD)</option>
+              </select>
             </div>
           </div>
           <div class="pt-2 flex gap-2">
@@ -1318,14 +1369,18 @@ function saveNewBill(e) {
   const branchId = AppState.activeBranchId;
   const title = document.getElementById('bill-title').value;
   const category = document.getElementById('bill-category').value;
-  let amount = Number(document.getElementById('bill-amount').value);
-  if (AppState.currency === 'USD') {
-    amount = amount * (AppState.exchangeRateUSD || 15000); // Save base as SYP
+  const currency = document.getElementById('bill-currency').value;
+  let amountInput = Number(document.getElementById('bill-amount').value);
+  
+  // Store base as SYP
+  let amountBaseSYP = amountInput;
+  if (currency === 'USD') {
+    amountBaseSYP = amountInput * (AppState.exchangeRateUSD || 15000);
   }
   const date = getTodayDateString();
   const status = "مدفوعة";
 
-  AppState.bills.push({ id: `bill-${Date.now()}`, branchId, title, category, amount, date, status });
+  AppState.bills.push({ id: `bill-${Date.now()}`, branchId, title, category, amount: amountBaseSYP, currency, date, status });
   saveState();
   closeModalDirect('modal-bill');
   if (currentView === 'bills') switchView('bills');
@@ -1440,7 +1495,7 @@ function renderEmployeesHTML() {
       <div class="flex items-center justify-between">
         <div>
           <h2 class="text-xl md:text-2xl font-black text-slate-800">إدارة الموظفين والرواتب والعمولات</h2>
-          <p class="text-xs text-slate-500">حساب الرواتب الثابتة، نسب العمولات ومستحقات الكادر (${AppState.currency})</p>
+          <p class="text-xs text-slate-500">حساب الرواتب الثابتة، نسب العمولات ومستحقات الكادر</p>
         </div>
       </div>
       <div class="glass-panel p-3 md:p-4 overflow-x-auto">
@@ -1489,7 +1544,7 @@ function renderReportsHTML() {
     <div class="space-y-4 md:space-y-6 animate-fade-in">
       <div>
         <h2 class="text-xl md:text-2xl font-black text-slate-800">التقارير المالية ومقارنة الفروع</h2>
-        <p class="text-xs text-slate-500">تحليل الأداء المالي، المبيعات والمصاريف لكل فرع (${AppState.currency})</p>
+        <p class="text-xs text-slate-500">تحليل الأداء المالي، المبيعات والمصاريف لكل فرع</p>
       </div>
 
       <div class="grid grid-cols-1 sm:grid-cols-3 gap-3 md:gap-4">
