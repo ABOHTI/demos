@@ -1,13 +1,15 @@
-/* SalonLove - Multi-Branch Architecture & Manager-Restricted Switching */
+/* SalonLove - Multi-Branch (حمص & الوادي) + Multi-Currency (SYP / USD) + رعبون */
 
 const DEFAULT_STATE = {
   isAdminLocked: true,
   adminPin: "1234",
   cashierName: "كاشير SalonLove",
   activeBranchId: "br-1",
+  currency: "SYP", // "SYP" or "USD"
+  exchangeRateUSD: 15000, // 1 USD = 15,000 SYP
   branches: [
-    { id: "br-1", name: "فرع الشعلان", address: "دمشق - الشعلان / شارع 29 أيار", phone: "011-2233445" },
-    { id: "br-2", name: "فرع أبو رمانة", address: "دمشق - أبو رمانة / ساحة المدفع", phone: "011-3344556" }
+    { id: "br-1", name: "فرع حمص", address: "حمص - شارع الدبلان / مقابل مجمع تشرين", phone: "031-224455" },
+    { id: "br-2", name: "فرع الوادي", address: "وادي النصارى - مشتى الحلو / الشارع العام", phone: "031-778899" }
   ],
   services: [
     { id: "srv-1", name: "قص شعر وتصفيف (نسائي)", price: 75000, category: "خدمات الشعر", duration: "45 min" },
@@ -33,8 +35,8 @@ const DEFAULT_STATE = {
     { id: "emp-4", branchId: "br-2", name: "ميساء حمصي", role: "استقبال وكاشير", phone: "0988112244", payType: "salary", fixedSalary: 750000, commissionRate: 0 }
   ],
   appointments: [
-    { id: "apt-101", branchId: "br-1", customerName: "سارة الزين", phone: "0991234567", date: getTodayDateString(), time: "14:00", serviceId: "srv-3", serviceName: "صبغة شعر كاملة + خصل", employeeId: "emp-1", employeeName: "ريم الأحمد", price: 250000, status: "confirmed" },
-    { id: "apt-102", branchId: "br-2", customerName: "هدى دروبي", phone: "0933445566", date: getTodayDateString(), time: "16:30", serviceId: "srv-5", serviceName: "تنظيف بشرة هيدرافيسيال", employeeId: "emp-3", employeeName: "سامر الحلبي", price: 180000, status: "pending" }
+    { id: "apt-101", branchId: "br-1", customerName: "سارة الزين", phone: "0991234567", date: getTodayDateString(), time: "14:00", serviceId: "srv-3", serviceName: "صبغة شعر كاملة + خصل", employeeId: "emp-1", employeeName: "ريم الأحمد", price: 250000, deposit: 50000, status: "confirmed" },
+    { id: "apt-102", branchId: "br-2", customerName: "هدى دروبي", phone: "0933445566", date: getTodayDateString(), time: "16:30", serviceId: "srv-5", serviceName: "تنظيف بشرة هيدرافيسيال", employeeId: "emp-3", employeeName: "سامر الحلبي", price: 180000, deposit: 0, status: "pending" }
   ],
   receipts: [
     {
@@ -70,9 +72,9 @@ const DEFAULT_STATE = {
     }
   ],
   bills: [
-    { id: "bill-1", branchId: "br-1", title: "فاتورة كهرباء فرع الشعلان", category: "كهرباء", amount: 350000, date: getTodayDateString(), status: "مدفوعة" },
-    { id: "bill-2", branchId: "br-1", title: "شراء مازوت مولدة الشعلان (200L)", category: "مازوت/محروقات", amount: 1200000, date: getTodayDateString(), status: "مدفوعة" },
-    { id: "bill-3", branchId: "br-2", title: "إيجار مقسم أبو رمانة الشهري", category: "إيجار", amount: 2500000, date: getTodayDateString(), status: "غير مدفوعة" }
+    { id: "bill-1", branchId: "br-1", title: "فاتورة كهرباء فرع حمص", category: "كهرباء", amount: 350000, date: getTodayDateString(), status: "مدفوعة" },
+    { id: "bill-2", branchId: "br-1", title: "شراء مازوت مولدة حمص (200L)", category: "مازوت/محروقات", amount: 1200000, date: getTodayDateString(), status: "مدفوعة" },
+    { id: "bill-3", branchId: "br-2", title: "إيجار صالون فرع الوادي الشهري", category: "إيجار", amount: 2500000, date: getTodayDateString(), status: "غير مدفوعة" }
   ]
 };
 
@@ -89,7 +91,7 @@ function getTodayDateString() {
 
 function loadState() {
   try {
-    const saved = localStorage.getItem('salonlove_multibranch_state');
+    const saved = localStorage.getItem('salonlove_multibranch_state_v4');
     if (saved) return JSON.parse(saved);
   } catch (e) {
     console.error("Error loading state", e);
@@ -99,14 +101,44 @@ function loadState() {
 
 function saveState() {
   try {
-    localStorage.setItem('salonlove_multibranch_state', JSON.stringify(AppState));
+    localStorage.setItem('salonlove_multibranch_state_v4', JSON.stringify(AppState));
   } catch (e) {
     console.error("Error saving state", e);
   }
 }
 
-function formatCurrency(amount) {
-  return Number(amount || 0).toLocaleString('en-US') + " SYP";
+// Currency Conversion & Display
+function formatCurrency(amountInSYP) {
+  const sypVal = Number(amountInSYP || 0);
+  if (AppState.currency === "USD") {
+    const usdVal = sypVal / (AppState.exchangeRateUSD || 15000);
+    return "$" + usdVal.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  }
+  return sypVal.toLocaleString('en-US') + " SYP";
+}
+
+function changeCurrency(curr) {
+  AppState.currency = curr;
+  saveState();
+  updateCurrencyUI();
+  updateBadges();
+  switchView(currentView);
+}
+
+function updateCurrencyUI() {
+  const btnSYP = document.getElementById('curr-btn-syp');
+  const btnUSD = document.getElementById('curr-btn-usd');
+  const sideLabel = document.getElementById('sidebar-curr-label');
+
+  if (AppState.currency === 'USD') {
+    if (btnUSD) btnUSD.className = "px-2 py-0.5 rounded text-[11px] font-bold transition bg-amber-500 text-white shadow-sm";
+    if (btnSYP) btnSYP.className = "px-2 py-0.5 rounded text-[11px] font-bold text-slate-600 hover:text-amber-600 transition";
+    if (sideLabel) sideLabel.textContent = "$ (USD)";
+  } else {
+    if (btnSYP) btnSYP.className = "px-2 py-0.5 rounded text-[11px] font-bold transition bg-amber-500 text-white shadow-sm";
+    if (btnUSD) btnUSD.className = "px-2 py-0.5 rounded text-[11px] font-bold text-slate-600 hover:text-amber-600 transition";
+    if (sideLabel) sideLabel.textContent = "ل.س (SYP)";
+  }
 }
 
 function getActiveBranch() {
@@ -115,6 +147,24 @@ function getActiveBranch() {
 
 function filterByBranch(list) {
   return list.filter(item => item.branchId === AppState.activeBranchId);
+}
+
+// Drawer Controller
+function toggleMobileSidebar(forceState = null) {
+  const sidebar = document.getElementById('app-sidebar');
+  const backdrop = document.getElementById('mobile-sidebar-backdrop');
+  if (!sidebar || !backdrop) return;
+
+  const isOpen = sidebar.classList.contains('sidebar-open');
+  const shouldOpen = forceState !== null ? forceState : !isOpen;
+
+  if (shouldOpen) {
+    sidebar.classList.add('sidebar-open');
+    backdrop.classList.remove('hidden');
+  } else {
+    sidebar.classList.remove('sidebar-open');
+    backdrop.classList.add('hidden');
+  }
 }
 
 // Branch Switching Restricted to Manager Mode
@@ -142,10 +192,10 @@ function updateBranchHeaderUI() {
     sel.value = AppState.activeBranchId;
     if (AppState.isAdminLocked) {
       sel.disabled = true;
-      sel.className = "bg-slate-100 border border-slate-300 text-slate-500 text-xs font-bold rounded-lg px-2 py-1 focus:outline-none cursor-not-allowed opacity-80";
+      sel.className = "bg-slate-100 border border-slate-300 text-slate-500 text-[11px] md:text-xs font-bold rounded-lg px-1.5 md:px-2 py-1 focus:outline-none cursor-not-allowed opacity-80 max-w-[125px] md:max-w-none truncate";
     } else {
       sel.disabled = false;
-      sel.className = "bg-amber-50 border border-amber-300 text-amber-900 text-xs font-bold rounded-lg px-2 py-1 focus:outline-none cursor-pointer";
+      sel.className = "bg-amber-50 border border-amber-300 text-amber-900 text-[11px] md:text-xs font-bold rounded-lg px-1.5 md:px-2 py-1 focus:outline-none cursor-pointer max-w-[125px] md:max-w-none truncate";
     }
   }
 
@@ -164,7 +214,6 @@ function updateBranchHeaderUI() {
   if (window.lucide) window.lucide.createIcons();
 }
 
-// App Initialization
 function initApp() {
   updateClock();
   setInterval(updateClock, 1000);
@@ -172,6 +221,7 @@ function initApp() {
   setupAdminLock();
   setupBackupButton();
   updateBranchHeaderUI();
+  updateCurrencyUI();
   updateBadges();
   switchView('dashboard');
 }
@@ -189,6 +239,7 @@ function setupNavigation() {
     btn.addEventListener('click', () => {
       const targetView = btn.getAttribute('data-view');
       switchView(targetView);
+      toggleMobileSidebar(false);
     });
   });
 }
@@ -269,7 +320,6 @@ function updateBadges() {
   }
 }
 
-// Manager Security PIN
 function setupAdminLock() {
   const lockBtn = document.getElementById('toggle-admin-lock-btn');
   if (lockBtn) {
@@ -399,53 +449,53 @@ function renderDashboardHTML() {
   const monthlyBillsTotal = filterByBranch(AppState.bills).reduce((sum, b) => sum + b.amount, 0);
 
   return `
-    <div class="space-y-6 animate-fade-in">
-      <div class="flex items-center justify-between">
+    <div class="space-y-4 md:space-y-6 animate-fade-in">
+      <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div>
           <div class="flex items-center gap-2">
-            <h2 class="text-2xl font-black text-slate-800">لوحة التحكم</h2>
+            <h2 class="text-xl md:text-2xl font-black text-slate-800">لوحة التحكم</h2>
             <span class="px-2.5 py-0.5 rounded-full text-xs font-bold bg-amber-100 text-amber-800 border border-amber-300">${curBranch.name}</span>
           </div>
           <p class="text-xs text-slate-500 mt-0.5">متابعة المبيعات والحجوزات والمخزون الحالي</p>
         </div>
-        <div class="flex gap-2">
-          <button onclick="switchView('pos')" class="gold-gradient-btn px-4 py-2 rounded-xl text-xs flex items-center gap-2">
+        <div>
+          <button onclick="switchView('pos')" class="gold-gradient-btn w-full sm:w-auto px-4 py-2 rounded-xl text-xs flex items-center justify-center gap-2">
             <i data-lucide="plus-circle" class="w-4 h-4"></i><span>فاتورة جديدة (${curBranch.name})</span>
           </button>
         </div>
       </div>
 
-      <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+      <div class="grid grid-cols-1 sm:grid-cols-3 gap-3 md:gap-4">
         <div class="glass-panel p-4 flex items-center justify-between border-amber-200">
           <div>
             <p class="text-xs text-slate-500">إيرادات اليوم (${curBranch.name})</p>
-            <h3 class="text-xl font-bold text-amber-600 mt-1">${formatCurrency(todaySalesTotal)}</h3>
+            <h3 class="text-lg md:text-xl font-bold text-amber-600 mt-1">${formatCurrency(todaySalesTotal)}</h3>
           </div>
-          <div class="w-12 h-12 bg-amber-50 rounded-xl flex items-center justify-center text-amber-600">
-            <i data-lucide="banknote" class="w-6 h-6"></i>
+          <div class="w-10 h-10 md:w-12 md:h-12 bg-amber-50 rounded-xl flex items-center justify-center text-amber-600">
+            <i data-lucide="banknote" class="w-5 h-5 md:w-6 md:h-6"></i>
           </div>
         </div>
         <div class="glass-panel p-4 flex items-center justify-between border-blue-200">
           <div>
             <p class="text-xs text-slate-500">مواعيد اليوم (${curBranch.name})</p>
-            <h3 class="text-xl font-bold text-slate-800 mt-1">${todayAppts.length}</h3>
+            <h3 class="text-lg md:text-xl font-bold text-slate-800 mt-1">${todayAppts.length}</h3>
           </div>
-          <div class="w-12 h-12 bg-blue-50 rounded-xl flex items-center justify-center text-blue-600">
-            <i data-lucide="calendar-check" class="w-6 h-6"></i>
+          <div class="w-10 h-10 md:w-12 md:h-12 bg-blue-50 rounded-xl flex items-center justify-center text-blue-600">
+            <i data-lucide="calendar-check" class="w-5 h-5 md:w-6 md:h-6"></i>
           </div>
         </div>
         <div class="glass-panel p-4 flex items-center justify-between border-rose-200">
           <div>
             <p class="text-xs text-slate-500">إجمالي المصاريف</p>
-            <h3 class="text-xl font-bold text-rose-600 mt-1">${formatCurrency(monthlyBillsTotal)}</h3>
+            <h3 class="text-lg md:text-xl font-bold text-rose-600 mt-1">${formatCurrency(monthlyBillsTotal)}</h3>
           </div>
-          <div class="w-12 h-12 bg-rose-50 rounded-xl flex items-center justify-center text-rose-600">
-            <i data-lucide="receipt" class="w-6 h-6"></i>
+          <div class="w-10 h-10 md:w-12 md:h-12 bg-rose-50 rounded-xl flex items-center justify-center text-rose-600">
+            <i data-lucide="receipt" class="w-5 h-5 md:w-6 md:h-6"></i>
           </div>
         </div>
       </div>
 
-      <div class="glass-panel p-5 space-y-4">
+      <div class="glass-panel p-4 md:p-5 space-y-4">
         <div class="flex items-center justify-between border-b border-slate-100 pb-3">
           <h3 class="font-bold text-sm text-slate-800">مواعيد اليوم (${today})</h3>
           <button onclick="switchView('appointments')" class="text-xs text-amber-600 hover:underline">عرض الكل</button>
@@ -453,12 +503,13 @@ function renderDashboardHTML() {
         <div class="space-y-2">
           ${todayAppts.length === 0 ? '<p class="text-xs text-slate-400 py-4 text-center">لا توجد مواعيد مسجلة لهذا الفرع اليوم</p>' : 
             todayAppts.map(apt => `
-              <div class="flex items-center justify-between p-3 bg-slate-50 rounded-xl border border-slate-200 text-xs">
+              <div class="flex flex-col sm:flex-row sm:items-center justify-between p-3 bg-slate-50 rounded-xl border border-slate-200 text-xs gap-2">
                 <div>
                   <h4 class="font-bold text-slate-800">${apt.customerName} (${apt.phone})</h4>
                   <p class="text-[11px] text-slate-500">${apt.serviceName} - المسؤول: <span class="text-amber-600 font-semibold">${apt.employeeName}</span> (${apt.time})</p>
+                  ${apt.deposit > 0 ? `<p class="text-[10px] text-emerald-600 font-bold mt-0.5">رعبون مدفوع: ${formatCurrency(apt.deposit)} | المتبقي: ${formatCurrency(apt.price - apt.deposit)}</p>` : ''}
                 </div>
-                <button onclick="convertApptToPOS('${apt.id}')" class="px-3 py-1.5 bg-amber-500 hover:bg-amber-600 text-white font-bold rounded text-[11px] shadow-sm">تحويل لـ POS</button>
+                <button onclick="convertApptToPOS('${apt.id}')" class="px-3 py-1.5 bg-amber-500 hover:bg-amber-600 text-white font-bold rounded text-[11px] shadow-sm self-end sm:self-auto">تحويل لـ POS</button>
               </div>
             `).join('')}
         </div>
@@ -474,29 +525,29 @@ function renderPOSHTML() {
   const employeesOptions = branchEmployees.map(e => `<option value="${e.id}">${e.name} (${e.role})</option>`).join('');
 
   return `
-    <div class="space-y-6 animate-fade-in">
-      <div class="flex items-center justify-between">
+    <div class="space-y-4 md:space-y-6 animate-fade-in">
+      <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
         <div>
-          <h2 class="text-2xl font-black text-slate-800">نقطة البيع الكاشير (POS)</h2>
-          <p class="text-xs text-slate-500">إصدار فواتير وسداد لـ <span class="font-bold text-amber-700">${curBranch.name}</span></p>
+          <h2 class="text-xl md:text-2xl font-black text-slate-800">نقطة البيع الكاشير (POS)</h2>
+          <p class="text-xs text-slate-500">إصدار فواتير وسداد لـ <span class="font-bold text-amber-700">${curBranch.name}</span> (${AppState.currency})</p>
         </div>
-        <div class="flex items-center gap-2">
+        <div class="flex items-center gap-2 self-start sm:self-auto">
           <span class="text-xs text-slate-500">الكاشير:</span>
           <span class="text-xs font-bold text-amber-700 px-2 py-1 bg-amber-100 border border-amber-200 rounded-lg">${AppState.cashierName}</span>
         </div>
       </div>
 
-      <div class="grid grid-cols-1 lg:grid-cols-12 gap-6">
-        <div class="lg:col-span-7 space-y-4">
-          <div class="flex items-center justify-between bg-white p-2 rounded-xl border border-slate-200 shadow-sm">
-            <div class="flex gap-2">
-              <button id="pos-tab-services" onclick="setPosTab('services')" class="px-4 py-2 rounded-lg text-xs font-bold bg-amber-500 text-white">الخدمات والقصات</button>
-              <button id="pos-tab-products" onclick="setPosTab('products')" class="px-4 py-2 rounded-lg text-xs font-bold bg-slate-100 text-slate-700">المنتجات والمستحضرات</button>
+      <div class="grid grid-cols-1 lg:grid-cols-12 gap-4 md:gap-6">
+        <div class="lg:col-span-7 space-y-3 md:space-y-4">
+          <div class="flex items-center justify-between bg-white p-2 rounded-xl border border-slate-200 shadow-sm gap-2">
+            <div class="flex gap-1 sm:gap-2">
+              <button id="pos-tab-services" onclick="setPosTab('services')" class="px-3 sm:px-4 py-2 rounded-lg text-xs font-bold bg-amber-500 text-white">الخدمات والقصات</button>
+              <button id="pos-tab-products" onclick="setPosTab('products')" class="px-3 sm:px-4 py-2 rounded-lg text-xs font-bold bg-slate-100 text-slate-700">المستحضرات</button>
             </div>
-            <input type="text" id="pos-search-input" oninput="filterPOSCatalog()" placeholder="بحث..." class="bg-slate-50 border border-slate-300 rounded-lg px-3 py-1.5 text-xs text-slate-700">
+            <input type="text" id="pos-search-input" oninput="filterPOSCatalog()" placeholder="بحث..." class="bg-slate-50 border border-slate-300 rounded-lg px-2 sm:px-3 py-1.5 text-xs text-slate-700 w-28 sm:w-auto">
           </div>
 
-          <div id="pos-catalog-grid" class="grid grid-cols-2 sm:grid-cols-3 gap-3 max-h-[520px] overflow-y-auto p-1">
+          <div id="pos-catalog-grid" class="grid grid-cols-2 sm:grid-cols-3 gap-2 sm:gap-3 max-h-[380px] sm:max-h-[520px] overflow-y-auto p-1">
             ${renderPOSCatalogItems()}
           </div>
         </div>
@@ -525,15 +576,15 @@ function renderPOSHTML() {
                 </div>
               </div>
 
-              <div class="min-h-[160px] max-h-[220px] overflow-y-auto space-y-2" id="pos-cart-items-container">
+              <div class="min-h-[140px] max-h-[200px] overflow-y-auto space-y-2" id="pos-cart-items-container">
                 ${renderPOSCartItems()}
               </div>
             </div>
 
             <div class="border-t border-slate-200 pt-3 space-y-3">
               <div class="flex items-center justify-between text-xs">
-                <span class="text-slate-600">خصم (SYP):</span>
-                <input type="number" id="pos-discount-input" oninput="updatePOSTotals()" value="0" min="0" class="w-28 bg-slate-50 border border-slate-300 rounded p-1 text-center font-bold text-amber-600">
+                <span class="text-slate-600">خصم / رعبون مسبق (${AppState.currency}):</span>
+                <input type="number" id="pos-discount-input" oninput="updatePOSTotals()" value="0" min="0" class="w-32 bg-slate-50 border border-slate-300 rounded p-1 text-center font-bold text-amber-600">
               </div>
 
               <div>
@@ -541,14 +592,14 @@ function renderPOSHTML() {
                 <div class="grid grid-cols-3 gap-2 text-xs">
                   <button type="button" onclick="setPaymentMethod('cash')" id="pay-btn-cash" class="py-2 rounded-lg border text-center font-bold border-amber-500 bg-amber-50 text-amber-700">كاش</button>
                   <button type="button" onclick="setPaymentMethod('epayment')" id="pay-btn-epayment" class="py-2 rounded-lg border text-center font-bold border-slate-200 bg-slate-50 text-slate-600">سيريتل كاش</button>
-                  <button type="button" onclick="setPaymentMethod('transfer')" id="pay-btn-transfer" class="py-2 rounded-lg border text-center font-bold border-slate-200 bg-slate-50 text-slate-600">تحويل بنكي</button>
+                  <button type="button" onclick="setPaymentMethod('transfer')" id="pay-btn-transfer" class="py-2 rounded-lg border text-center font-bold border-slate-200 bg-slate-50 text-slate-600">تحويل</button>
                 </div>
               </div>
 
               <div class="bg-slate-50 p-3 rounded-xl space-y-1 text-xs border border-slate-200">
                 <div class="flex justify-between text-slate-600"><span>المجموع:</span><span id="pos-subtotal-val">${formatCurrency(calculatePosSubtotal())}</span></div>
                 <div class="flex justify-between text-base font-black text-amber-600 pt-1 border-t border-slate-200">
-                  <span>المبلغ النهائي:</span><span id="pos-total-val">${formatCurrency(calculatePosTotal())}</span>
+                  <span>المبلغ النهائي للمطالبة:</span><span id="pos-total-val">${formatCurrency(calculatePosTotal())}</span>
                 </div>
               </div>
 
@@ -575,10 +626,10 @@ function renderPOSCatalogItems(filterText = "") {
     const price = currentPosTab === 'services' ? item.price : item.sellPrice;
     const stockNote = currentPosTab === 'products' ? `<span class="text-[10px] text-slate-400">المتوفر: ${item.stocks[branchKey] || 0}</span>` : '';
     return `
-      <div onclick="addCartItem('${item.id}', '${currentPosTab}')" class="glass-panel p-3 rounded-xl cursor-pointer hover:border-amber-400 transition flex flex-col justify-between space-y-2">
+      <div onclick="addCartItem('${item.id}', '${currentPosTab}')" class="glass-panel p-2.5 sm:p-3 rounded-xl cursor-pointer hover:border-amber-400 transition flex flex-col justify-between space-y-2">
         <div>
           <div class="flex items-center justify-between">
-            <span class="text-[10px] text-amber-700 font-semibold">${item.category || ''}</span>
+            <span class="text-[10px] text-amber-700 font-semibold truncate">${item.category || ''}</span>
             ${stockNote}
           </div>
           <h4 class="font-bold text-xs text-slate-800 line-clamp-2 mt-0.5">${item.name}</h4>
@@ -597,11 +648,11 @@ function setPosTab(tab) {
   const btnServ = document.getElementById('pos-tab-services');
   const btnProd = document.getElementById('pos-tab-products');
   if (tab === 'services') {
-    btnServ.className = "px-4 py-2 rounded-lg text-xs font-bold bg-amber-500 text-white";
-    btnProd.className = "px-4 py-2 rounded-lg text-xs font-bold bg-slate-100 text-slate-700";
+    btnServ.className = "px-3 sm:px-4 py-2 rounded-lg text-xs font-bold bg-amber-500 text-white";
+    btnProd.className = "px-3 sm:px-4 py-2 rounded-lg text-xs font-bold bg-slate-100 text-slate-700";
   } else {
-    btnProd.className = "px-4 py-2 rounded-lg text-xs font-bold bg-amber-500 text-white";
-    btnServ.className = "px-4 py-2 rounded-lg text-xs font-bold bg-slate-100 text-slate-700";
+    btnProd.className = "px-3 sm:px-4 py-2 rounded-lg text-xs font-bold bg-amber-500 text-white";
+    btnServ.className = "px-3 sm:px-4 py-2 rounded-lg text-xs font-bold bg-slate-100 text-slate-700";
   }
   document.getElementById('pos-catalog-grid').innerHTML = renderPOSCatalogItems();
   if (window.lucide) window.lucide.createIcons();
@@ -671,7 +722,10 @@ function calculatePosSubtotal() {
 
 function calculatePosTotal() {
   const sub = calculatePosSubtotal();
-  const disc = Number(document.getElementById('pos-discount-input')?.value || 0);
+  let disc = Number(document.getElementById('pos-discount-input')?.value || 0);
+  if (AppState.currency === 'USD') {
+    disc = disc * (AppState.exchangeRateUSD || 15000); // convert entered USD discount back to SYP base
+  }
   return Math.max(0, sub - disc);
 }
 
@@ -712,7 +766,10 @@ function checkoutPOS(shouldPrint) {
   const employeeName = employeeObj ? employeeObj.name : "موظف SalonLove";
 
   const subtotal = calculatePosSubtotal();
-  const discount = Number(document.getElementById('pos-discount-input')?.value || 0);
+  let discount = Number(document.getElementById('pos-discount-input')?.value || 0);
+  if (AppState.currency === 'USD') {
+    discount = discount * (AppState.exchangeRateUSD || 15000);
+  }
   const total = calculatePosTotal();
 
   const newReceiptId = `INV-${Math.floor(1000 + Math.random() * 9000)}`;
@@ -761,8 +818,8 @@ function openReceiptModal(receipt) {
   const branchObj = AppState.branches.find(b => b.id === receipt.branchId) || AppState.branches[0];
   const holder = document.getElementById('modals-placeholder');
   holder.innerHTML = `
-    <div id="modal-receipt-view" class="fixed inset-0 modal-overlay flex items-center justify-center p-4 z-50">
-      <div class="glass-panel w-full max-w-sm p-6 rounded-2xl border border-slate-300 space-y-4 animate-fade-in shadow-2xl">
+    <div id="modal-receipt-view" class="fixed inset-0 modal-overlay flex items-center justify-center p-3 z-50">
+      <div class="glass-panel w-full max-w-sm max-h-[90vh] overflow-y-auto p-4 sm:p-6 rounded-2xl border border-slate-300 space-y-4 animate-fade-in shadow-2xl">
         <div class="flex items-center justify-between border-b border-slate-200 pb-3">
           <h3 class="font-bold text-slate-800 text-sm">إيصال حراري - SalonLove (${branchObj.name})</h3>
           <button onclick="closeModalDirect('modal-receipt-view')" class="text-slate-400 hover:text-slate-700"><i data-lucide="x" class="w-5 h-5"></i></button>
@@ -794,8 +851,8 @@ function openReceiptModal(receipt) {
           </table>
           <div class="space-y-0.5 text-[11px]">
             <div class="flex justify-between text-slate-600"><span>المجموع:</span><span>${formatCurrency(receipt.subtotal)}</span></div>
-            <div class="flex justify-between text-slate-600"><span>الخصم:</span><span>${formatCurrency(receipt.discount)}</span></div>
-            <div class="flex justify-between font-bold text-sm text-slate-900 pt-1 border-t border-slate-300"><span>الصافي:</span><span>${formatCurrency(receipt.total)}</span></div>
+            <div class="flex justify-between text-slate-600"><span>الخصم / الرعبون:</span><span>${formatCurrency(receipt.discount)}</span></div>
+            <div class="flex justify-between font-bold text-sm text-slate-900 pt-1 border-t border-slate-300"><span>الصافي المدفوع:</span><span>${formatCurrency(receipt.total)}</span></div>
           </div>
           <div class="text-center text-[10px] text-slate-500 pt-1">
             <p>Thank you for visiting SalonLove!</p>
@@ -842,6 +899,15 @@ function convertApptToPOS(apptId) {
     if (custInput) custInput.value = apt.customerName;
     const empSelect = document.getElementById('pos-employee-select');
     if (empSelect && apt.employeeId) empSelect.value = apt.employeeId;
+    
+    const discInput = document.getElementById('pos-discount-input');
+    if (discInput && apt.deposit) {
+      if (AppState.currency === 'USD') {
+        discInput.value = (apt.deposit / (AppState.exchangeRateUSD || 15000)).toFixed(2);
+      } else {
+        discInput.value = apt.deposit;
+      }
+    }
     refreshCartUI();
   }, 50);
 }
@@ -853,31 +919,32 @@ function renderAppointmentsHTML() {
   const today = getTodayDateString();
   const curBranch = getActiveBranch();
   return `
-    <div class="space-y-6 animate-fade-in">
-      <div class="flex flex-col md:flex-row md:items-center justify-between gap-4">
+    <div class="space-y-4 md:space-y-6 animate-fade-in">
+      <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div>
-          <h2 class="text-2xl font-black text-slate-800">نظام الحجوزات والمواعيد</h2>
-          <p class="text-xs text-slate-500">حجوزات <span class="font-bold text-amber-700">${curBranch.name}</span></p>
+          <h2 class="text-xl md:text-2xl font-black text-slate-800">نظام الحجوزات والمواعيد</h2>
+          <p class="text-xs text-slate-500">حجوزات <span class="font-bold text-amber-700">${curBranch.name}</span> (${AppState.currency})</p>
         </div>
-        <div class="flex items-center gap-3">
-          <input type="date" id="appt-date-filter" value="${today}" onchange="filterAppointments()" class="bg-white border border-slate-300 rounded-xl px-3 py-2 text-xs text-slate-700">
-          <button onclick="openNewAppointmentModal()" class="gold-gradient-btn px-4 py-2 rounded-xl text-xs flex items-center gap-2">
+        <div class="flex items-center gap-2 sm:gap-3">
+          <input type="date" id="appt-date-filter" value="${today}" onchange="filterAppointments()" class="bg-white border border-slate-300 rounded-xl px-2 sm:px-3 py-1.5 sm:py-2 text-xs text-slate-700 flex-1 sm:flex-none">
+          <button onclick="openNewAppointmentModal()" class="gold-gradient-btn px-3 sm:px-4 py-1.5 sm:py-2 rounded-xl text-xs flex items-center gap-1.5 whitespace-nowrap">
             <i data-lucide="plus" class="w-4 h-4"></i><span>حجز موعد</span>
           </button>
         </div>
       </div>
 
-      <div class="glass-panel p-4 overflow-x-auto">
-        <table class="w-full text-right text-xs text-slate-700">
+      <div class="glass-panel p-3 md:p-4 overflow-x-auto">
+        <table class="w-full text-right text-xs text-slate-700 min-w-[550px]">
           <thead class="bg-slate-50 text-amber-700 font-bold border-b border-slate-200">
             <tr>
-              <th class="p-3">اسم الزبون / الهاتف</th>
-              <th class="p-3">الوقت والتاريخ</th>
-              <th class="p-3">الخدمة</th>
-              <th class="p-3">المسؤول</th>
-              <th class="p-3">السعر</th>
-              <th class="p-3">الحالة</th>
-              <th class="p-3 text-center">إجراءات</th>
+              <th class="p-2 sm:p-3">الزبون / الهاتف</th>
+              <th class="p-2 sm:p-3">الوقت والتاريخ</th>
+              <th class="p-2 sm:p-3">الخدمة</th>
+              <th class="p-2 sm:p-3">المسؤول</th>
+              <th class="p-2 sm:p-3">السعر الإجمالي</th>
+              <th class="p-2 sm:p-3">الرعبون المدفوع</th>
+              <th class="p-2 sm:p-3">الحالة</th>
+              <th class="p-2 sm:p-3 text-center">إجراءات</th>
             </tr>
           </thead>
           <tbody id="appointments-table-body" class="divide-y divide-slate-100">
@@ -893,23 +960,32 @@ function renderAppointmentsRows(dateFilter = "") {
   let list = filterByBranch(AppState.appointments);
   if (dateFilter) list = list.filter(a => a.date === dateFilter);
   if (list.length === 0) {
-    return `<tr><td colspan="7" class="p-6 text-center text-slate-400">لا توجد مواعيد مسجلة</td></tr>`;
+    return `<tr><td colspan="8" class="p-6 text-center text-slate-400">لا توجد مواعيد مسجلة</td></tr>`;
   }
-  return list.map(apt => `
-    <tr class="hover:bg-slate-50">
-      <td class="p-3 font-bold text-slate-800">${apt.customerName} <br><span class="text-[10px] text-slate-500 font-normal">${apt.phone}</span></td>
-      <td class="p-3">${apt.date} <br><span class="text-amber-600 font-bold">${apt.time}</span></td>
-      <td class="p-3">${apt.serviceName}</td>
-      <td class="p-3">${apt.employeeName}</td>
-      <td class="p-3 font-bold text-amber-600">${formatCurrency(apt.price)}</td>
-      <td class="p-3"><span class="px-2 py-0.5 rounded text-[10px] font-semibold badge-${apt.status}">${apt.status}</span></td>
-      <td class="p-3 text-center flex items-center justify-center gap-1">
-        <button onclick="convertApptToPOS('${apt.id}')" title="تحويل لـ POS" class="p-1.5 bg-amber-50 text-amber-600 rounded border border-amber-200"><i data-lucide="shopping-cart" class="w-3.5 h-3.5"></i></button>
-        <button onclick="updateAppointmentStatus('${apt.id}', 'completed')" title="إنجاز" class="p-1.5 bg-emerald-50 text-emerald-600 rounded border border-emerald-200"><i data-lucide="check" class="w-3.5 h-3.5"></i></button>
-        <button onclick="deleteAppointment('${apt.id}')" title="حذف" class="p-1.5 bg-rose-50 text-rose-600 rounded border border-rose-200"><i data-lucide="trash-2" class="w-3.5 h-3.5"></i></button>
-      </td>
-    </tr>
-  `).join('');
+  return list.map(apt => {
+    const depositVal = Number(apt.deposit || 0);
+    const remainingVal = Math.max(0, apt.price - depositVal);
+    return `
+      <tr class="hover:bg-slate-50">
+        <td class="p-2 sm:p-3 font-bold text-slate-800">${apt.customerName} <br><span class="text-[10px] text-slate-500 font-normal">${apt.phone}</span></td>
+        <td class="p-2 sm:p-3">${apt.date} <br><span class="text-amber-600 font-bold">${apt.time}</span></td>
+        <td class="p-2 sm:p-3">${apt.serviceName}</td>
+        <td class="p-2 sm:p-3">${apt.employeeName}</td>
+        <td class="p-2 sm:p-3 font-bold text-slate-800">${formatCurrency(apt.price)}</td>
+        <td class="p-2 sm:p-3">
+          ${depositVal > 0 
+            ? `<span class="font-bold text-emerald-600">${formatCurrency(depositVal)}</span><br><span class="text-[10px] text-rose-500 font-semibold">باقي: ${formatCurrency(remainingVal)}</span>` 
+            : `<span class="text-slate-400">بدون رعبون</span>`}
+        </td>
+        <td class="p-2 sm:p-3"><span class="px-2 py-0.5 rounded text-[10px] font-semibold badge-${apt.status}">${apt.status}</span></td>
+        <td class="p-2 sm:p-3 text-center flex items-center justify-center gap-1">
+          <button onclick="convertApptToPOS('${apt.id}')" title="تحويل لـ POS وتطبيق الرعبون" class="p-1.5 bg-amber-50 text-amber-600 rounded border border-amber-200"><i data-lucide="shopping-cart" class="w-3.5 h-3.5"></i></button>
+          <button onclick="updateAppointmentStatus('${apt.id}', 'completed')" title="إنجاز" class="p-1.5 bg-emerald-50 text-emerald-600 rounded border border-emerald-200"><i data-lucide="check" class="w-3.5 h-3.5"></i></button>
+          <button onclick="deleteAppointment('${apt.id}')" title="حذف" class="p-1.5 bg-rose-50 text-rose-600 rounded border border-rose-200"><i data-lucide="trash-2" class="w-3.5 h-3.5"></i></button>
+        </td>
+      </tr>
+    `;
+  }).join('');
 }
 
 function filterAppointments() {
@@ -929,8 +1005,8 @@ function openNewAppointmentModal() {
 
   const holder = document.getElementById('modals-placeholder');
   holder.innerHTML = `
-    <div id="modal-appointment" class="fixed inset-0 modal-overlay flex items-center justify-center p-4 z-50">
-      <div class="glass-panel w-full max-w-md p-6 rounded-2xl border border-slate-300 animate-fade-in space-y-4 shadow-xl">
+    <div id="modal-appointment" class="fixed inset-0 modal-overlay flex items-center justify-center p-3 sm:p-4 z-50">
+      <div class="glass-panel w-full max-w-md max-h-[92vh] overflow-y-auto p-4 sm:p-6 rounded-2xl border border-slate-300 animate-fade-in space-y-4 shadow-xl">
         <div class="flex items-center justify-between border-b border-slate-200 pb-3">
           <h3 class="font-bold text-slate-800 text-base">حجز موعد (${curBranch.name})</h3>
           <button onclick="closeModalDirect('modal-appointment')" class="text-slate-400 hover:text-slate-700"><i data-lucide="x" class="w-5 h-5"></i></button>
@@ -966,6 +1042,10 @@ function openNewAppointmentModal() {
               ${empOpt}
             </select>
           </div>
+          <div>
+            <label class="block text-slate-600 mb-1">قيمة الرعبون (${AppState.currency}) - اتركه 0 إن لم يدفع</label>
+            <input type="number" id="appt-deposit-input" min="0" value="0" step="any" placeholder="0" class="w-full bg-slate-50 border border-amber-300 rounded-lg p-2 font-bold text-amber-700">
+          </div>
           <div class="pt-2 flex gap-2">
             <button type="button" onclick="closeModalDirect('modal-appointment')" class="w-1/2 bg-slate-100 text-slate-700 py-2.5 rounded-xl font-semibold">إلغاء</button>
             <button type="submit" class="w-1/2 gold-gradient-btn py-2.5 rounded-xl font-bold">تأكيد الحجز</button>
@@ -992,6 +1072,11 @@ function saveNewAppointment(e) {
   const empSelect = document.getElementById('appt-employee-select');
   const employeeId = empSelect.value;
   const employeeName = empSelect.options[empSelect.selectedIndex].text.split(' (')[0];
+  
+  let depositInput = Number(document.getElementById('appt-deposit-input')?.value || 0);
+  if (AppState.currency === 'USD') {
+    depositInput = depositInput * (AppState.exchangeRateUSD || 15000);
+  }
 
   AppState.appointments.push({
     id: `apt-${Date.now()}`,
@@ -1005,6 +1090,7 @@ function saveNewAppointment(e) {
     employeeId,
     employeeName,
     price: servicePrice,
+    deposit: depositInput,
     status: 'confirmed'
   });
 
@@ -1037,34 +1123,34 @@ function bindAppointmentsEvents() {}
 // --- 4. RECEIPTS ---
 function renderReceiptsHTML() {
   return `
-    <div class="space-y-6 animate-fade-in">
-      <div class="flex flex-col md:flex-row md:items-center justify-between gap-4">
+    <div class="space-y-4 md:space-y-6 animate-fade-in">
+      <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div>
-          <h2 class="text-2xl font-black text-slate-800">سجل الإيصالات والمعاملات</h2>
-          <p class="text-xs text-slate-500">أرشيف الفواتير الصادرة وطرق السداد</p>
+          <h2 class="text-xl md:text-2xl font-black text-slate-800">سجل الإيصالات والمعاملات</h2>
+          <p class="text-xs text-slate-500">أرشيف الفواتير الصادرة وطرق السداد (${AppState.currency})</p>
         </div>
-        <div class="flex items-center gap-3">
-          <select id="receipt-filter-payment" onchange="filterReceiptsTable()" class="bg-white border border-slate-300 rounded-xl px-3 py-2 text-xs text-slate-700">
-            <option value="all">جميع طرق الدفع</option>
+        <div class="flex items-center gap-2 sm:gap-3">
+          <select id="receipt-filter-payment" onchange="filterReceiptsTable()" class="bg-white border border-slate-300 rounded-xl px-2 sm:px-3 py-1.5 sm:py-2 text-xs text-slate-700">
+            <option value="all">جميع الطرق</option>
             <option value="cash">نقدي (Cash)</option>
             <option value="epayment">دفع إلكتروني</option>
             <option value="transfer">تحويل بنكي</option>
           </select>
-          <input type="text" id="receipt-search-input" oninput="filterReceiptsTable()" placeholder="بحث برقم الفاتورة..." class="bg-white border border-slate-300 rounded-xl px-3 py-2 text-xs text-slate-700">
+          <input type="text" id="receipt-search-input" oninput="filterReceiptsTable()" placeholder="بحث برقم الفاتورة..." class="bg-white border border-slate-300 rounded-xl px-2 sm:px-3 py-1.5 sm:py-2 text-xs text-slate-700 flex-1 sm:flex-none">
         </div>
       </div>
 
-      <div class="glass-panel p-4 overflow-x-auto">
-        <table class="w-full text-right text-xs text-slate-700">
+      <div class="glass-panel p-3 md:p-4 overflow-x-auto">
+        <table class="w-full text-right text-xs text-slate-700 min-w-[500px]">
           <thead class="bg-slate-50 text-amber-700 font-bold border-b border-slate-200">
             <tr>
-              <th class="p-3">رقم الفاتورة</th>
-              <th class="p-3">التاريخ والوقت</th>
-              <th class="p-3">الزبون</th>
-              <th class="p-3">طريقة الدفع</th>
-              <th class="p-3">الموظف</th>
-              <th class="p-3">المبلغ</th>
-              <th class="p-3 text-center">طباعة</th>
+              <th class="p-2 sm:p-3">رقم الفاتورة</th>
+              <th class="p-2 sm:p-3">التاريخ والوقت</th>
+              <th class="p-2 sm:p-3">الزبون</th>
+              <th class="p-2 sm:p-3">طريقة الدفع</th>
+              <th class="p-2 sm:p-3">الموظف</th>
+              <th class="p-2 sm:p-3">المبلغ</th>
+              <th class="p-2 sm:p-3 text-center">طباعة</th>
             </tr>
           </thead>
           <tbody id="receipts-table-body" class="divide-y divide-slate-100">
@@ -1087,13 +1173,13 @@ function renderReceiptsRows(methodFilter = "all", searchQ = "") {
 
   return list.map(r => `
     <tr class="hover:bg-slate-50">
-      <td class="p-3 font-bold text-amber-600">${r.id}</td>
-      <td class="p-3">${r.date}</td>
-      <td class="p-3 font-semibold text-slate-800">${r.customerName}</td>
-      <td class="p-3">${r.paymentMethod}</td>
-      <td class="p-3">${r.employeeName}</td>
-      <td class="p-3 font-black text-emerald-600">${formatCurrency(r.total)}</td>
-      <td class="p-3 text-center">
+      <td class="p-2 sm:p-3 font-bold text-amber-600">${r.id}</td>
+      <td class="p-2 sm:p-3">${r.date}</td>
+      <td class="p-2 sm:p-3 font-semibold text-slate-800">${r.customerName}</td>
+      <td class="p-2 sm:p-3">${r.paymentMethod}</td>
+      <td class="p-2 sm:p-3">${r.employeeName}</td>
+      <td class="p-2 sm:p-3 font-black text-emerald-600">${formatCurrency(r.total)}</td>
+      <td class="p-2 sm:p-3 text-center">
         <button onclick="viewReceiptModal('${r.id}')" class="p-1.5 bg-slate-100 border border-slate-200 text-slate-700 rounded"><i data-lucide="printer" class="w-3.5 h-3.5"></i></button>
       </td>
     </tr>
@@ -1119,62 +1205,62 @@ function renderBillsHTML() {
   const unpaidCount = bills.filter(b => b.status === 'غير مدفوعة').length;
 
   return `
-    <div class="space-y-6 animate-fade-in">
-      <div class="flex flex-col md:flex-row md:items-center justify-between gap-4">
+    <div class="space-y-4 md:space-y-6 animate-fade-in">
+      <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div>
-          <h2 class="text-2xl font-black text-slate-800">المصاريف التشغيلية</h2>
-          <p class="text-xs text-slate-500">فواتير الكهرباء والمحروقات والإيجارات</p>
+          <h2 class="text-xl md:text-2xl font-black text-slate-800">المصاريف التشغيلية</h2>
+          <p class="text-xs text-slate-500">فواتير الكهرباء والمحروقات والإيجارات (${AppState.currency})</p>
         </div>
-        <button onclick="openNewBillModal()" class="gold-gradient-btn px-4 py-2 rounded-xl text-xs flex items-center gap-2">
+        <button onclick="openNewBillModal()" class="gold-gradient-btn px-4 py-2 rounded-xl text-xs flex items-center justify-center gap-2">
           <i data-lucide="plus" class="w-4 h-4"></i><span>تسجيل مصروف جديد</span>
         </button>
       </div>
 
-      <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+      <div class="grid grid-cols-1 sm:grid-cols-3 gap-3 md:gap-4">
         <div class="glass-panel p-4 flex items-center justify-between border-rose-200">
           <div>
             <p class="text-xs text-slate-500">إجمالي المصاريف</p>
-            <h3 class="text-xl font-bold text-rose-600 mt-1">${formatCurrency(totalBills)}</h3>
+            <h3 class="text-lg md:text-xl font-bold text-rose-600 mt-1">${formatCurrency(totalBills)}</h3>
           </div>
-          <i data-lucide="calculator" class="w-8 h-8 text-rose-500/50"></i>
+          <i data-lucide="calculator" class="w-7 h-7 md:w-8 md:h-8 text-rose-500/50"></i>
         </div>
         <div class="glass-panel p-4 flex items-center justify-between border-amber-200">
           <div>
             <p class="text-xs text-slate-500">فواتير غير مدفوعة</p>
-            <h3 class="text-xl font-bold text-amber-600 mt-1">${unpaidCount}</h3>
+            <h3 class="text-lg md:text-xl font-bold text-amber-600 mt-1">${unpaidCount}</h3>
           </div>
-          <i data-lucide="clock" class="w-8 h-8 text-amber-500/50"></i>
+          <i data-lucide="clock" class="w-7 h-7 md:w-8 md:h-8 text-amber-500/50"></i>
         </div>
         <div class="glass-panel p-4 flex items-center justify-between border-emerald-200">
           <div>
             <p class="text-xs text-slate-500">القسم التشغيلي</p>
-            <h3 class="text-base font-bold text-slate-800 mt-1">طاقة ومحروقات وإيجار</h3>
+            <h3 class="text-sm md:text-base font-bold text-slate-800 mt-1">طاقة ومحروقات وإيجار</h3>
           </div>
-          <i data-lucide="flame" class="w-8 h-8 text-amber-500/50"></i>
+          <i data-lucide="flame" class="w-7 h-7 md:w-8 md:h-8 text-amber-500/50"></i>
         </div>
       </div>
 
-      <div class="glass-panel p-4 overflow-x-auto">
-        <table class="w-full text-right text-xs text-slate-700">
+      <div class="glass-panel p-3 md:p-4 overflow-x-auto">
+        <table class="w-full text-right text-xs text-slate-700 min-w-[500px]">
           <thead class="bg-slate-50 text-amber-700 font-bold border-b border-slate-200">
             <tr>
-              <th class="p-3">عنوان الفاتورة</th>
-              <th class="p-3">الفئة</th>
-              <th class="p-3">المبلغ (SYP)</th>
-              <th class="p-3">التاريخ</th>
-              <th class="p-3">الحالة</th>
-              <th class="p-3 text-center">إجراءات</th>
+              <th class="p-2 sm:p-3">عنوان الفاتورة</th>
+              <th class="p-2 sm:p-3">الفئة</th>
+              <th class="p-2 sm:p-3">المبلغ (${AppState.currency})</th>
+              <th class="p-2 sm:p-3">التاريخ</th>
+              <th class="p-2 sm:p-3">الحالة</th>
+              <th class="p-2 sm:p-3 text-center">إجراءات</th>
             </tr>
           </thead>
           <tbody class="divide-y divide-slate-100">
             ${bills.map(b => `
               <tr class="hover:bg-slate-50">
-                <td class="p-3 font-bold text-slate-800">${b.title}</td>
-                <td class="p-3">${b.category}</td>
-                <td class="p-3 font-bold text-rose-600">${formatCurrency(b.amount)}</td>
-                <td class="p-3">${b.date}</td>
-                <td class="p-3"><span class="px-2 py-0.5 rounded text-[10px] font-semibold ${b.status === 'مدفوعة' ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'}">${b.status}</span></td>
-                <td class="p-3 text-center flex items-center justify-center gap-1">
+                <td class="p-2 sm:p-3 font-bold text-slate-800">${b.title}</td>
+                <td class="p-2 sm:p-3">${b.category}</td>
+                <td class="p-2 sm:p-3 font-bold text-rose-600">${formatCurrency(b.amount)}</td>
+                <td class="p-2 sm:p-3">${b.date}</td>
+                <td class="p-2 sm:p-3"><span class="px-2 py-0.5 rounded text-[10px] font-semibold ${b.status === 'مدفوعة' ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'}">${b.status}</span></td>
+                <td class="p-2 sm:p-3 text-center flex items-center justify-center gap-1">
                   <button onclick="toggleBillStatus('${b.id}')" title="تبديل الحالة" class="p-1.5 bg-slate-100 text-slate-700 rounded border border-slate-200"><i data-lucide="refresh-cw" class="w-3.5 h-3.5"></i></button>
                   <button onclick="deleteBill('${b.id}')" title="حذف" class="p-1.5 bg-rose-50 text-rose-600 rounded border border-rose-200"><i data-lucide="trash-2" class="w-3.5 h-3.5"></i></button>
                 </td>
@@ -1190,8 +1276,8 @@ function renderBillsHTML() {
 function openNewBillModal() {
   const holder = document.getElementById('modals-placeholder');
   holder.innerHTML = `
-    <div id="modal-bill" class="fixed inset-0 modal-overlay flex items-center justify-center p-4 z-50">
-      <div class="glass-panel w-full max-w-md p-6 rounded-2xl border border-slate-300 animate-fade-in space-y-4 shadow-xl">
+    <div id="modal-bill" class="fixed inset-0 modal-overlay flex items-center justify-center p-3 sm:p-4 z-50">
+      <div class="glass-panel w-full max-w-md max-h-[92vh] overflow-y-auto p-4 sm:p-6 rounded-2xl border border-slate-300 animate-fade-in space-y-4 shadow-xl">
         <div class="flex items-center justify-between border-b border-slate-200 pb-3">
           <h3 class="font-bold text-slate-800 text-base">تسجيل مصروف جديد</h3>
           <button onclick="closeModalDirect('modal-bill')" class="text-slate-400 hover:text-slate-700"><i data-lucide="x" class="w-5 h-5"></i></button>
@@ -1212,8 +1298,8 @@ function openNewBillModal() {
               </select>
             </div>
             <div>
-              <label class="block text-slate-600 mb-1">المبلغ (SYP) *</label>
-              <input type="number" id="bill-amount" min="1" required placeholder="0" class="w-full bg-slate-50 border border-slate-300 rounded-lg p-2 text-slate-800">
+              <label class="block text-slate-600 mb-1">المبلغ (${AppState.currency}) *</label>
+              <input type="number" id="bill-amount" min="1" step="any" required placeholder="0" class="w-full bg-slate-50 border border-slate-300 rounded-lg p-2 text-slate-800">
             </div>
           </div>
           <div class="pt-2 flex gap-2">
@@ -1232,7 +1318,10 @@ function saveNewBill(e) {
   const branchId = AppState.activeBranchId;
   const title = document.getElementById('bill-title').value;
   const category = document.getElementById('bill-category').value;
-  const amount = Number(document.getElementById('bill-amount').value);
+  let amount = Number(document.getElementById('bill-amount').value);
+  if (AppState.currency === 'USD') {
+    amount = amount * (AppState.exchangeRateUSD || 15000); // Save base as SYP
+  }
   const date = getTodayDateString();
   const status = "مدفوعة";
 
@@ -1266,35 +1355,35 @@ function renderInventoryHTML() {
   const curBranch = getActiveBranch();
 
   return `
-    <div class="space-y-6 animate-fade-in">
-      <div class="flex flex-col md:flex-row md:items-center justify-between gap-4">
+    <div class="space-y-4 md:space-y-6 animate-fade-in">
+      <div class="flex flex-col md:flex-row md:items-center justify-between gap-2">
         <div>
-          <h2 class="text-2xl font-black text-slate-800">مخزون المستحضرات والتجهيزات</h2>
+          <h2 class="text-xl md:text-2xl font-black text-slate-800">مخزون المستحضرات والتجهيزات</h2>
           <p class="text-xs text-slate-500">الكميات الحالية المتوفرة في مستودعات الفروع</p>
         </div>
       </div>
 
-      <div class="glass-panel p-4 overflow-x-auto">
-        <table class="w-full text-right text-xs text-slate-700">
+      <div class="glass-panel p-3 md:p-4 overflow-x-auto">
+        <table class="w-full text-right text-xs text-slate-700 min-w-[500px]">
           <thead class="bg-slate-50 text-amber-700 font-bold border-b border-slate-200">
             <tr>
-              <th class="p-3">المنتج</th>
-              <th class="p-3 text-center">فرع الشعلان</th>
-              <th class="p-3 text-center">فرع أبو رمانة</th>
-              <th class="p-3">الحد الأدنى</th>
-              <th class="p-3">سعر البيع</th>
-              <th class="p-3 text-center">تعديل المخزون (${curBranch.name})</th>
+              <th class="p-2 sm:p-3">المنتج</th>
+              <th class="p-2 sm:p-3 text-center">فرع حمص</th>
+              <th class="p-2 sm:p-3 text-center">فرع الوادي</th>
+              <th class="p-2 sm:p-3">الحد الأدنى</th>
+              <th class="p-2 sm:p-3">سعر البيع</th>
+              <th class="p-2 sm:p-3 text-center">تعديل المخزون (${curBranch.name})</th>
             </tr>
           </thead>
           <tbody class="divide-y divide-slate-100">
             ${AppState.inventory.map(item => `
               <tr class="hover:bg-slate-50 ${(item.stocks[curBranch.id] || 0) <= item.minStock ? 'bg-rose-50' : ''}">
-                <td class="p-3 font-bold text-slate-800">${item.name}</td>
-                <td class="p-3 text-center font-bold text-slate-700">${item.stocks['br-1'] || 0}</td>
-                <td class="p-3 text-center font-bold text-slate-700">${item.stocks['br-2'] || 0}</td>
-                <td class="p-3">${item.minStock}</td>
-                <td class="p-3 font-bold text-amber-600">${formatCurrency(item.sellPrice)}</td>
-                <td class="p-3 text-center flex items-center justify-center gap-1">
+                <td class="p-2 sm:p-3 font-bold text-slate-800">${item.name}</td>
+                <td class="p-2 sm:p-3 text-center font-bold text-slate-700">${item.stocks['br-1'] || 0}</td>
+                <td class="p-2 sm:p-3 text-center font-bold text-slate-700">${item.stocks['br-2'] || 0}</td>
+                <td class="p-2 sm:p-3">${item.minStock}</td>
+                <td class="p-2 sm:p-3 font-bold text-amber-600">${formatCurrency(item.sellPrice)}</td>
+                <td class="p-2 sm:p-3 text-center flex items-center justify-center gap-1">
                   <button onclick="adjustStock('${item.id}', 1)" class="w-6 h-6 bg-white border border-slate-300 rounded font-bold text-slate-700">+</button>
                   <button onclick="adjustStock('${item.id}', -1)" class="w-6 h-6 bg-white border border-slate-300 rounded font-bold text-slate-700">-</button>
                 </td>
@@ -1333,40 +1422,40 @@ function renderEmployeesHTML() {
 
     return `
       <tr class="hover:bg-slate-50">
-        <td class="p-3 font-semibold text-slate-500">${branchName}</td>
-        <td class="p-3 font-bold text-slate-800">${emp.name} <br><span class="text-[10px] text-slate-500 font-normal">${emp.phone}</span></td>
-        <td class="p-3">${emp.role}</td>
-        <td class="p-3"><span class="px-2 py-0.5 rounded text-[10px] font-semibold bg-purple-100 text-purple-700">${emp.payType}</span></td>
-        <td class="p-3">${formatCurrency(fixed)}</td>
-        <td class="p-3 font-bold text-amber-600">${emp.payType !== 'salary' ? emp.commissionRate + '%' : '-'}</td>
-        <td class="p-3">${formatCurrency(empSales)}</td>
-        <td class="p-3 font-bold text-emerald-600">${formatCurrency(commissionEarned)}</td>
-        <td class="p-3 font-black text-purple-700">${formatCurrency(grandTotal)}</td>
+        <td class="p-2 sm:p-3 font-semibold text-slate-500">${branchName}</td>
+        <td class="p-2 sm:p-3 font-bold text-slate-800">${emp.name} <br><span class="text-[10px] text-slate-500 font-normal">${emp.phone}</span></td>
+        <td class="p-2 sm:p-3">${emp.role}</td>
+        <td class="p-2 sm:p-3"><span class="px-2 py-0.5 rounded text-[10px] font-semibold bg-purple-100 text-purple-700">${emp.payType}</span></td>
+        <td class="p-2 sm:p-3">${formatCurrency(fixed)}</td>
+        <td class="p-2 sm:p-3 font-bold text-amber-600">${emp.payType !== 'salary' ? emp.commissionRate + '%' : '-'}</td>
+        <td class="p-2 sm:p-3">${formatCurrency(empSales)}</td>
+        <td class="p-2 sm:p-3 font-bold text-emerald-600">${formatCurrency(commissionEarned)}</td>
+        <td class="p-2 sm:p-3 font-black text-purple-700">${formatCurrency(grandTotal)}</td>
       </tr>
     `;
   }).join('');
 
   return `
-    <div class="space-y-6 animate-fade-in">
+    <div class="space-y-4 md:space-y-6 animate-fade-in">
       <div class="flex items-center justify-between">
         <div>
-          <h2 class="text-2xl font-black text-slate-800">إدارة الموظفين والرواتب والعمولات</h2>
-          <p class="text-xs text-slate-500">حساب الرواتب الثابتة، نسب العمولات ومستحقات الكادر</p>
+          <h2 class="text-xl md:text-2xl font-black text-slate-800">إدارة الموظفين والرواتب والعمولات</h2>
+          <p class="text-xs text-slate-500">حساب الرواتب الثابتة، نسب العمولات ومستحقات الكادر (${AppState.currency})</p>
         </div>
       </div>
-      <div class="glass-panel p-4 overflow-x-auto">
-        <table class="w-full text-right text-xs text-slate-700">
+      <div class="glass-panel p-3 md:p-4 overflow-x-auto">
+        <table class="w-full text-right text-xs text-slate-700 min-w-[600px]">
           <thead class="bg-slate-50 text-amber-700 font-bold border-b border-slate-200">
             <tr>
-              <th class="p-3">الفرع</th>
-              <th class="p-3">الموظف</th>
-              <th class="p-3">المسمى</th>
-              <th class="p-3">النظام</th>
-              <th class="p-3">الراتب الثابت</th>
-              <th class="p-3">النسبة</th>
-              <th class="p-3">المبيعات</th>
-              <th class="p-3">العمولة</th>
-              <th class="p-3">الإجمالي المستحق</th>
+              <th class="p-2 sm:p-3">الفرع</th>
+              <th class="p-2 sm:p-3">الموظف</th>
+              <th class="p-2 sm:p-3">المسمى</th>
+              <th class="p-2 sm:p-3">النظام</th>
+              <th class="p-2 sm:p-3">الراتب الثابت</th>
+              <th class="p-2 sm:p-3">النسبة</th>
+              <th class="p-2 sm:p-3">المبيعات</th>
+              <th class="p-2 sm:p-3">العمولة</th>
+              <th class="p-2 sm:p-3">الإجمالي المستحق</th>
             </tr>
           </thead>
           <tbody class="divide-y divide-slate-100">
@@ -1380,7 +1469,7 @@ function renderEmployeesHTML() {
 
 function bindEmployeesEvents() {}
 
-// --- 8. REPORTS (SIDE-BY-SIDE AUDIT) ---
+// --- 8. REPORTS ---
 function renderReportsHTML() {
   const getBranchStats = (bId) => {
     const receipts = AppState.receipts.filter(r => r.branchId === bId);
@@ -1390,58 +1479,56 @@ function renderReportsHTML() {
     return { rev, exp, net: rev - exp, count: receipts.length };
   };
 
-  const shalan = getBranchStats('br-1');
-  const abuRomaneh = getBranchStats('br-2');
-  const totalRev = shalan.rev + abuRomaneh.rev;
-  const totalExp = shalan.exp + abuRomaneh.exp;
+  const homs = getBranchStats('br-1');
+  const wadi = getBranchStats('br-2');
+  const totalRev = homs.rev + wadi.rev;
+  const totalExp = homs.exp + wadi.exp;
   const totalNet = totalRev - totalExp;
 
   return `
-    <div class="space-y-6 animate-fade-in">
+    <div class="space-y-4 md:space-y-6 animate-fade-in">
       <div>
-        <h2 class="text-2xl font-black text-slate-800">التقارير المالية ومقارنة الفروع</h2>
-        <p class="text-xs text-slate-500">تحليل الأداء المالي، المبيعات والمصاريف لكل فرع</p>
+        <h2 class="text-xl md:text-2xl font-black text-slate-800">التقارير المالية ومقارنة الفروع</h2>
+        <p class="text-xs text-slate-500">تحليل الأداء المالي، المبيعات والمصاريف لكل فرع (${AppState.currency})</p>
       </div>
 
-      <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+      <div class="grid grid-cols-1 sm:grid-cols-3 gap-3 md:gap-4">
         <div class="glass-panel p-4 border-emerald-200">
           <p class="text-xs text-slate-500">إجمالي إيرادات الصالون</p>
-          <h3 class="text-xl font-extrabold text-emerald-600 mt-1">${formatCurrency(totalRev)}</h3>
+          <h3 class="text-lg md:text-xl font-extrabold text-emerald-600 mt-1">${formatCurrency(totalRev)}</h3>
         </div>
         <div class="glass-panel p-4 border-rose-200">
           <p class="text-xs text-slate-500">إجمالي المصاريف المجمعة</p>
-          <h3 class="text-xl font-extrabold text-rose-600 mt-1">${formatCurrency(totalExp)}</h3>
+          <h3 class="text-lg md:text-xl font-extrabold text-rose-600 mt-1">${formatCurrency(totalExp)}</h3>
         </div>
         <div class="glass-panel p-4 border-amber-200">
           <p class="text-xs text-slate-500">صافي أرباح الفروع معاً</p>
-          <h3 class="text-xl font-extrabold text-amber-600 mt-1">${formatCurrency(totalNet)}</h3>
+          <h3 class="text-lg md:text-xl font-extrabold text-amber-600 mt-1">${formatCurrency(totalNet)}</h3>
         </div>
       </div>
 
-      <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-        <!-- Branch 1: Al-Shalan -->
-        <div class="glass-panel p-5 space-y-4 border-t-4 border-amber-500">
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-6">
+        <div class="glass-panel p-4 md:p-5 space-y-3 md:space-y-4 border-t-4 border-amber-500">
           <div class="flex items-center justify-between border-b border-slate-100 pb-2">
-            <h3 class="font-black text-base text-slate-800">📍 فرع الشعلان</h3>
-            <span class="text-xs bg-amber-100 text-amber-800 px-2 py-0.5 rounded font-bold">${shalan.count} فواتير</span>
+            <h3 class="font-black text-base text-slate-800">📍 فرع حمص</h3>
+            <span class="text-xs bg-amber-100 text-amber-800 px-2 py-0.5 rounded font-bold">${homs.count} فواتير</span>
           </div>
           <div class="space-y-2 text-xs">
-            <div class="flex justify-between p-2 bg-slate-50 rounded"><span>الإيرادات:</span><b class="text-emerald-600">${formatCurrency(shalan.rev)}</b></div>
-            <div class="flex justify-between p-2 bg-slate-50 rounded"><span>المصاريف:</span><b class="text-rose-600">${formatCurrency(shalan.exp)}</b></div>
-            <div class="flex justify-between p-2.5 bg-amber-50 rounded font-bold text-sm"><span>صافي الربح:</span><b class="text-amber-700">${formatCurrency(shalan.net)}</b></div>
+            <div class="flex justify-between p-2 bg-slate-50 rounded"><span>الإيرادات:</span><b class="text-emerald-600">${formatCurrency(homs.rev)}</b></div>
+            <div class="flex justify-between p-2 bg-slate-50 rounded"><span>المصاريف:</span><b class="text-rose-600">${formatCurrency(homs.exp)}</b></div>
+            <div class="flex justify-between p-2.5 bg-amber-50 rounded font-bold text-sm"><span>صافي الربح:</span><b class="text-amber-700">${formatCurrency(homs.net)}</b></div>
           </div>
         </div>
 
-        <!-- Branch 2: Abu Romaneh -->
-        <div class="glass-panel p-5 space-y-4 border-t-4 border-blue-500">
+        <div class="glass-panel p-4 md:p-5 space-y-3 md:space-y-4 border-t-4 border-blue-500">
           <div class="flex items-center justify-between border-b border-slate-100 pb-2">
-            <h3 class="font-black text-base text-slate-800">📍 فرع أبو رمانة</h3>
-            <span class="text-xs bg-blue-100 text-blue-800 px-2 py-0.5 rounded font-bold">${abuRomaneh.count} فواتير</span>
+            <h3 class="font-black text-base text-slate-800">📍 فرع الوادي</h3>
+            <span class="text-xs bg-blue-100 text-blue-800 px-2 py-0.5 rounded font-bold">${wadi.count} فواتير</span>
           </div>
           <div class="space-y-2 text-xs">
-            <div class="flex justify-between p-2 bg-slate-50 rounded"><span>الإيرادات:</span><b class="text-emerald-600">${formatCurrency(abuRomaneh.rev)}</b></div>
-            <div class="flex justify-between p-2 bg-slate-50 rounded"><span>المصاريف:</span><b class="text-rose-600">${formatCurrency(abuRomaneh.exp)}</b></div>
-            <div class="flex justify-between p-2.5 bg-blue-50 rounded font-bold text-sm"><span>صافي الربح:</span><b class="text-blue-700">${formatCurrency(abuRomaneh.net)}</b></div>
+            <div class="flex justify-between p-2 bg-slate-50 rounded"><span>الإيرادات:</span><b class="text-emerald-600">${formatCurrency(wadi.rev)}</b></div>
+            <div class="flex justify-between p-2 bg-slate-50 rounded"><span>المصاريف:</span><b class="text-rose-600">${formatCurrency(wadi.exp)}</b></div>
+            <div class="flex justify-between p-2.5 bg-blue-50 rounded font-bold text-sm"><span>صافي الربح:</span><b class="text-blue-700">${formatCurrency(wadi.net)}</b></div>
           </div>
         </div>
       </div>
